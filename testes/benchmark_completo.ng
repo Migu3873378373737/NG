@@ -1,0 +1,219 @@
+# =========================================================
+# NG BENCHMARK COMPLETO
+# Versao: 1.0
+# Objetivo: medir desempenho do interpretador NG
+# =========================================================
+
+Importar @time
+
+Print "======================================"
+Print "       NG BENCHMARK COMPLETO"
+Print "======================================"
+
+# ---------------------------------------------------------
+# TESTE 1 - LOOP E INCREMENTO
+# ---------------------------------------------------------
+
+Print ""
+Print "[1] LOOP E INCREMENTO"
+
+T0 = Time.Now()
+
+Contador = 0
+Enquanto Contador < 2000000 [
+    Contador = Contador + 1
+]
+
+T1 = Time.Now()
+
+Print "Iteracoes:"
+Print Contador
+Print "Tempo:"
+Print T1 - T0
+
+
+# ---------------------------------------------------------
+# TESTE 2 - OPERACOES ARITMETICAS
+# ---------------------------------------------------------
+
+Print ""
+Print "[2] OPERACOES ARITMETICAS"
+
+T0 = Time.Now()
+
+A = 1
+B = 2
+Resultado = 0
+Contador = 0
+
+Enquanto Contador < 1000000 [
+    Resultado = A + B
+    Resultado = Resultado * 2
+    Resultado = Resultado - A
+    Resultado = Resultado / B
+    A = A + 1
+    B = B + 1
+    Contador = Contador + 1
+]
+
+T1 = Time.Now()
+
+Print "Resultado:"
+Print Resultado
+Print "Tempo:"
+Print T1 - T0
+
+
+# ---------------------------------------------------------
+# TESTE 3 - CONDICOES E DESVIOS
+# ---------------------------------------------------------
+
+Print ""
+Print "[3] CONDICOES E DESVIOS"
+
+T0 = Time.Now()
+
+Contador = 0
+Pares = 0
+Impares = 0
+
+Enquanto Contador < 1000000 [
+    Se Contador % 2 == 0 [
+        Pares = Pares + 1
+    ] Senao [
+        Impares = Impares + 1
+    ]
+
+    Contador = Contador + 1
+]
+
+T1 = Time.Now()
+
+Print "Pares:"
+Print Pares
+Print "Impares:"
+Print Impares
+Print "Tempo:"
+Print T1 - T0
+
+
+# ---------------------------------------------------------
+# TESTE 4 - LISTAS E ITERACAO
+# ---------------------------------------------------------
+
+Print ""
+Print "[4] LISTAS E ITERACAO"
+
+T0 = Time.Now()
+
+Nomes = ["Ana", "Joao", "Jose", "Maria", "Angela"]
+
+Contador = 0
+Enquanto Contador < 200000 [
+    Loop Nome in Nomes [
+        Texto = Nome
+    ]
+
+    Contador = Contador + 1
+]
+
+T1 = Time.Now()
+
+Print "Iteracoes externas:"
+Print Contador
+Print "Tempo:"
+Print T1 - T0
+
+
+# ---------------------------------------------------------
+# TESTE 5 - ACESSO POR INDICE
+# ---------------------------------------------------------
+
+Print ""
+Print "[5] ACESSO POR INDICE"
+
+T0 = Time.Now()
+
+Nomes = ["Ana", "Joao", "Jose", "Maria", "Angela"]
+
+Contador = 0
+
+Enquanto Contador < 1000000 [
+    Texto = Nomes[0]
+    Texto = Nomes[1]
+    Texto = Nomes[2]
+    Contador = Contador + 1
+]
+
+T1 = Time.Now()
+
+Print "Acessos realizados:"
+Print Contador * 3
+Print "Tempo:"
+Print T1 - T0
+
+
+# ---------------------------------------------------------
+# TESTE 6 - CONCATENACAO DE STRINGS
+# ---------------------------------------------------------
+
+Print ""
+Print "[6] CONCATENACAO DE STRINGS"
+
+T0 = Time.Now()
+
+Contador = 0
+
+Enquanto Contador < 200000 [
+    Texto = "NG" + "-Benchmark" + "-Teste"
+    Contador = Contador + 1
+]
+
+T1 = Time.Now()
+
+Print "Operacoes:"
+Print Contador
+Print "Tempo:"
+Print T1 - T0
+
+
+# ---------------------------------------------------------
+# TESTE 7 - LOOP ANINHADO
+# ---------------------------------------------------------
+
+Print ""
+Print "[7] LOOP ANINHADO"
+
+T0 = Time.Now()
+
+A = 0
+Total = 0
+
+Enquanto A < 1000 [
+    B = 0
+
+    Enquanto B < 1000 [
+        Total = Total + 1
+        B = B + 1
+    ]
+
+    A = A + 1
+]
+
+T1 = Time.Now()
+
+Print "Operacoes:"
+Print Total
+Print "Tempo:"
+Print T1 - T0
+
+
+# ---------------------------------------------------------
+# RESULTADO FINAL
+# ---------------------------------------------------------
+
+Print ""
+Print "======================================"
+Print "       BENCHMARK FINALIZADO"
+Print "======================================"
+Print "Todos os testes foram executados."

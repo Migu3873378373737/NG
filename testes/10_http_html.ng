@@ -1,0 +1,22 @@
+# Teste do servidor HTTP com HTML e N3Cache preparado para futuras melhorias
+
+Importar @http
+
+Servidor = HTTP()
+
+# Pagina inicial
+Servidor.Get("/", Função(req, res) [
+    res.Arquivo("testes/pagina.html")
+])
+
+# Arquivos estáticos da pasta testes
+Servidor.ServirArquivos("/", "testes")
+
+Print "======================================"
+Print " NG Web Server"
+Print "======================================"
+Print "Servidor: http://127.0.0.1:8080"
+Print "HTML: pagina.html"
+Print "Servidor iniciado. Ctrl+C para parar."
+
+Servidor.Listen(8080)

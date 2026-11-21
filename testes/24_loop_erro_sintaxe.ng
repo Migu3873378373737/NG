@@ -1,0 +1,6 @@
+# Erro de sintaxe: falta o nome da variavel apos Loop
+Nomes = ["Ana"]
+
+Loop in Nomes [
+    Print "nao executa"
+]

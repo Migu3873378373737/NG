@@ -1,0 +1,54 @@
+CC = clang
+PREFIX ?= /data/data/com.termux/files/usr
+NDK_MULTILIB ?= $(PREFIX)/opt/ndk-multilib
+
+OPT_LEVEL ?= -Os
+LTO ?= -flto
+LINK_FLAGS = $(LTO) -Wl,--gc-sections -Wl,-s
+BASE_CFLAGS = -D_GNU_SOURCE -Wall -Wextra -std=c11 $(OPT_LEVEL) $(LTO) -Iinclude \
+              -ffunction-sections -fdata-sections \
+              -fno-asynchronous-unwind-tables -fno-unwind-tables \
+              -DNG_NO_CURL -DNG_NO_SQLITE
+
+SRC = src/main.c src/lexer.c src/parser.c src/ast.c src/runtime.c src/value.c src/interpreter.c src/module.c src/ng_native_module.c src/ng_json.c src/ng_http.c src/ng_net_libs.c src/ng_stdlib.c src/ng_n3cache.c src/repl.c src/ng_process.c src/ng_dependency.c src/ng_interop.c src/ng_collection.c src/ng_sqlite.c src/ng_print.c
+BINDIR = bin
+
+all: arm64 armhf
+
+# Verifica se o pacote Termux ndk-multilib esta instalado (bionic 32/64 bits).
+check-ndk:
+	@test -f $(NDK_MULTILIB)/arm-linux-androideabi/lib/libc.so || \
+	 { echo "ERRO: ndk-multilib nao encontrado. Instale: apt install ndk-multilib"; exit 1; }
+	@test -f $(NDK_MULTILIB)/aarch64-linux-android/lib/libc.so || \
+	 { echo "ERRO: ndk-multilib incompleto (aarch64)."; exit 1; }
+
+arm64: check-ndk
+	@mkdir -p $(BINDIR)
+	$(CC) --target=aarch64-linux-android \
+		--sysroot=$(PREFIX) -B$(PREFIX)/aarch64-linux-android/lib \
+		-I$(PREFIX)/include -I$(PREFIX)/include/aarch64-linux-android \
+		$(BASE_CFLAGS) $(SRC) -o $(BINDIR)/ng_arm64 \
+		-L$(PREFIX)/aarch64-linux-android/lib \
+		-L$(NDK_MULTILIB)/aarch64-linux-android/lib \
+		-lm -ldl $(LINK_FLAGS)
+
+armhf: check-ndk
+	@mkdir -p $(BINDIR)
+	$(CC) --target=armv7a-linux-androideabi \
+		--sysroot=$(PREFIX) -B$(PREFIX)/arm-linux-androideabi/lib \
+		-I$(PREFIX)/include -I$(PREFIX)/include/arm-linux-androideabi \
+		$(BASE_CFLAGS) $(SRC) -o $(BINDIR)/ng_armhf \
+		-L$(PREFIX)/arm-linux-androideabi/lib \
+		-L$(NDK_MULTILIB)/arm-linux-androideabi/lib \
+		-lm -ldl $(LINK_FLAGS)
+
+x86_64:
+	@mkdir -p $(BINDIR)
+	$(CC) --target=x86_64-linux-gnu $(BASE_CFLAGS) $(SRC) -o $(BINDIR)/ng_x86_64 -lm -ldl $(LINK_FLAGS) || echo "x86_64 falhou (sem sysroot)"
+
+x86:
+	@mkdir -p $(BINDIR)
+	$(CC) --target=i686-linux-gnu $(BASE_CFLAGS) $(SRC) -o $(BINDIR)/ng_x86 -lm -ldl $(LINK_FLAGS) || echo "x86 falhou (sem sysroot)"
+
+clean:
+	rm -f $(BINDIR)/ng_arm64 $(BINDIR)/ng_armhf $(BINDIR)/ng_x86_64 $(BINDIR)/ng_x86

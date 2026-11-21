@@ -1,0 +1,6 @@
+# Biblioteca Padrao: ini
+Importar @ini
+
+Função Parse(texto) [
+    Y = INI.Parse(texto)
+]

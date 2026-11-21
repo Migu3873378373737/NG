@@ -1,0 +1,6 @@
+Print "ANTES DO IMPORT"
+
+Importar @http
+
+Print "DEPOIS DO IMPORT"
+Print "HTTP IMPORTADO COM SUCESSO!"

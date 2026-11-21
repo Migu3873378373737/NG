@@ -1,0 +1,5 @@
+Importar @http
+
+Info()
+Get("https://api.whatsapp.com/v1/messages")
+E2EE_Envelope("5511999999999", "Mensagem de teste com criptografia ponta a ponta")

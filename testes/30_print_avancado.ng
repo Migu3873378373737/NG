@@ -1,0 +1,34 @@
+# Sistema Print avancado: modos reais de formatacao
+Importar @format
+Importar @json
+
+L = ["Ana", "João", 42, 7]
+
+Print "--- CSV ---"
+Print Format.Formatar(L, "csv")
+
+Print "--- JSON indentado ---"
+Print Format.Formatar(L, "json-indentado")
+
+Print "--- Markdown ---"
+Print Format.Formatar(L, "markdown")
+
+Print "--- Tabela ---"
+Print Format.Formatar(L, "tabela")
+
+Print "--- Enumerado ---"
+Print Format.Formatar(L, "enumerado")
+
+Print "--- Progresso / hex / binario ---"
+Print Format.Formatar(75, "progresso")
+Print Format.Formatar(255, "hex")
+Print Format.Formatar(5, "binario")
+
+Print "--- Estatisticas / resumo / estrutura ---"
+Print Format.Formatar(L, "estatisticas")
+Print Format.Formatar(L, "resumo")
+Print Format.Formatar(L, "estrutura")
+
+Print "--- 64 modos disponiveis ---"
+Modos = Format.Modos()
+Print JSON.Tamanho(Modos)

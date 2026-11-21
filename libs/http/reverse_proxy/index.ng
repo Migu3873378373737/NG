@@ -1,0 +1,10 @@
+# Modulo Reverse Proxy Nativo NG
+Importar @reverse_proxy
+
+Função Novo(alvos) [
+    Y = ReverseProxy.Novo(alvos)
+]
+
+Função Balancear(alvos) [
+    Y = ReverseProxy.Balance(alvos)
+]

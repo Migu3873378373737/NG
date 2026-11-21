@@ -1,0 +1,3 @@
+Y = "Uma string razoavelmente longa para testar alocacao dinamica no heap da NG Language Engine sem vazamentos de memoria ou corrupcao de ponteiros durante a execucao e finalizacao do programa."
+G Y
+Print "String longa em Y testada."

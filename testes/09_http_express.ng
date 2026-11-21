@@ -1,0 +1,19 @@
+# Teste Completo da API Express-like da NG Language
+
+Importar @http
+
+Servidor = HTTP()
+
+Servidor.Get("/", Função(req, res) [
+    res.HTML("<h1>NG funcionando!</h1>")
+])
+
+Servidor.Get("/api", Função(req, res) [
+    res.JSON("{\"status\":\"ok\"}")
+])
+
+Servidor.Get("/teste-fim", Função(req, res)
+    res.HTML("<p>Bloco fechado com fim</p>")
+fim)
+
+Print "Servidor Express-like NG configurado perfeitamente."

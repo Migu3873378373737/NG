@@ -1,0 +1,29 @@
+# SQLite real: criacao, insercao, consulta, listagem e estrutura
+Importar @sqlite
+Importar @json
+
+Banco = SQLite(":memory:")
+
+Banco.CriarTabela("CREATE TABLE usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL, idade INTEGER)")
+Print "--- tabelas ---"
+Print Banco.ListarTabelas()
+
+Banco.Inserir("usuarios", JSON.Parse("{\"nome\":\"Ana\",\"idade\":30}"))
+Banco.Inserir("usuarios", JSON.Parse("{\"nome\":\"João\",\"idade\":25}"))
+
+Print "--- consulta ---"
+Usuarios = Banco.Consultar("SELECT id, nome, idade FROM usuarios ORDER BY nome", [])
+Print Usuarios
+
+Loop U in Usuarios [
+    Print U.nome
+]
+
+Print "--- estrutura ---"
+Print Banco.Estrutura("usuarios")
+Print Banco.Colunas("usuarios")
+
+Print "--- parametros preparados ---"
+Print Banco.Consultar("SELECT nome FROM usuarios WHERE idade > ?", [26])
+
+Banco.Fechar()

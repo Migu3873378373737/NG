@@ -1,0 +1,21 @@
+Importar @http
+
+Print "CRIANDO SERVIDOR..."
+
+Servidor = HTTP()
+
+Servidor.Get("/", Função(req, res) [
+    res.HTML("<h1>NG Web Server funcionando!</h1><p>Servidor HTTP nativo C11</p>")
+])
+
+Servidor.Get("/api", Função(req, res) [
+    res.JSON("{\"status\":\"ok\",\"linguagem\":\"NG\"}")
+])
+
+Servidor.ServirArquivos("/static", "testes")
+
+Print "ROTAS REGISTRADAS"
+Print "Iniciando servidor na porta 8080..."
+Print "Acesse http://127.0.0.1:8080"
+
+Servidor.Listen(8080)
