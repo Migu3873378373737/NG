@@ -1,6 +1,7 @@
 #ifndef NG_LEXER_H
 #define NG_LEXER_H
 
+#include <stdbool.h>
 #include <stddef.h>
 
 typedef enum {
@@ -59,6 +60,8 @@ typedef struct {
     double number_value;
     int line;
     int column;
+    /* true quando havia espaco/comentario antes deste token. */
+    bool space_before;
 } NGToken;
 
 typedef struct {

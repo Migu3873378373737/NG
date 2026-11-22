@@ -334,7 +334,8 @@ static void stringify_value(StrBuf* b, const NGValue* val) {
                 buf_append(b, "[");
                 NGValue len_val;
                 size_t arr_len = 0;
-                if (ng_table_get(tbl, "length", &len_val) && len_val.type == NG_VAL_NUMBER) {
+                if (ng_table_get(tbl, "length", &len_val) && len_val.type == NG_VAL_NUMBER &&
+                    len_val.as.number > 0) {
                     arr_len = (size_t)len_val.as.number;
                 }
                 for (size_t i = 0; i < arr_len; i++) {

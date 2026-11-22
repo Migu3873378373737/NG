@@ -31,13 +31,16 @@ static char advance(NGLexer* l) {
     return c;
 }
 
-static void skip_whitespace_and_comments(NGLexer* l) {
+static bool skip_whitespace_and_comments(NGLexer* l) {
+    bool skipped = false;
     while (l->cursor < l->length) {
         char c = peek(l);
         if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
             advance(l);
+            skipped = true;
         } else if (c == '#' || (c == '/' && l->cursor + 1 < l->length && l->source[l->cursor + 1] == '/')) {
             // Comentário de linha única
+            skipped = true;
             while (peek(l) != '\0' && peek(l) != '\n') {
                 advance(l);
             }
@@ -45,6 +48,7 @@ static void skip_whitespace_and_comments(NGLexer* l) {
             break;
         }
     }
+    return skipped;
 }
 
 void ng_token_free(NGToken* token) {
@@ -55,13 +59,14 @@ void ng_token_free(NGToken* token) {
 }
 
 NGToken ng_lexer_next_token(NGLexer* l) {
-    skip_whitespace_and_comments(l);
+    bool spaced = skip_whitespace_and_comments(l);
 
     NGToken tok;
     tok.text = NULL;
     tok.number_value = 0.0;
     tok.line = l->line;
     tok.column = l->column;
+    tok.space_before = spaced;
 
     if (l->cursor >= l->length) {
         tok.type = NG_TOK_EOF;

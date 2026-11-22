@@ -255,31 +255,105 @@ static NGAstNode* parse_primary_base(NGParser* p) {
     return NULL;
 }
 
-/* Acesso por indice: lista[0] ou registro["campo"]. */
+static void parse_call_arguments(NGParser* p, NGAstNode* call) {
+    call->as.call_expr.args = NULL;
+    call->as.call_expr.arg_count = 0;
+    if (!check(p, NG_TOK_RPAREN)) {
+        do {
+            call->as.call_expr.arg_count++;
+            call->as.call_expr.args = (NGAstNode**)realloc(
+                call->as.call_expr.args,
+                sizeof(NGAstNode*) * call->as.call_expr.arg_count);
+            call->as.call_expr.args[call->as.call_expr.arg_count - 1] = parse_expression(p);
+        } while (match(p, NG_TOK_COMMA));
+    }
+    if (!match(p, NG_TOK_RPAREN)) {
+        error_at_current(p, NG_ERR_SYNTAX, "Erro de Sintaxe",
+                         "Esperado ')' apos os argumentos da funcao.",
+                         "Feche os parenteses da chamada.");
+    }
+}
+
+/* Pos-fixos encadeados: lista[0], registro["campo"], valor.campo,
+   valor.metodo(...), inclusive combinacoes como lista[0].campo. */
 static NGAstNode* parse_primary(NGParser* p) {
     NGAstNode* node = parse_primary_base(p);
 
-    while (node && !p->disable_index && check(p, NG_TOK_LBRACKET)) {
-        advance(p);  /* consome '[' */
-        NGAstNode* index = parse_expression(p);
-        NGAstNode* access = ng_ast_new(NG_AST_EXPR_INDEX, node->line, node->column);
-        access->as.index_expr.target = node;
-        access->as.index_expr.index = index;
-        if (!match(p, NG_TOK_RBRACKET)) {
-            error_at_current(p, NG_ERR_SYNTAX, "Erro de Sintaxe",
-                             "Esperado ']' apos o indice.", "Feche o indice com ']'.");
+    while (node) {
+        /* Em condicoes (Se/Enquanto/Loop) o '[' tambem abre bloco. Um indice
+           valido vem colado ao valor (sem espaco), enquanto o bloco costuma
+           ser separado por espaco: Se Lista[0] == 1 [ ... ]. */
+        if (check(p, NG_TOK_LBRACKET) &&
+            (!p->disable_index || !p->current.space_before)) {
+            advance(p);  /* consome '[' */
+            NGAstNode* index = parse_expression(p);
+            NGAstNode* access = ng_ast_new(NG_AST_EXPR_INDEX, node->line, node->column);
+            access->as.index_expr.target = node;
+            access->as.index_expr.index = index;
+            if (!match(p, NG_TOK_RBRACKET)) {
+                error_at_current(p, NG_ERR_SYNTAX, "Erro de Sintaxe",
+                                 "Esperado ']' apos o indice.", "Feche o indice com ']'.");
+            }
+            node = access;
+            continue;
         }
-        node = access;
+
+        if (match(p, NG_TOK_DOT)) {
+            if (!match(p, NG_TOK_IDENTIFIER)) {
+                error_at_current(p, NG_ERR_SYNTAX, "Erro de Sintaxe",
+                                 "Esperado identificador de campo apos '.'.",
+                                 "Informe o nome do campo da tabela.");
+                break;
+            }
+            NGAstNode* access = ng_ast_new(NG_AST_EXPR_TABLE_GET,
+                                           node->line, node->column);
+            access->as.table_get.table = node;
+            access->as.table_get.field = take_token_text(p);
+            if (match(p, NG_TOK_LPAREN)) {
+                NGAstNode* call = ng_ast_new(NG_AST_EXPR_CALL,
+                                             node->line, node->column);
+                call->as.call_expr.callee = access;
+                parse_call_arguments(p, call);
+                node = call;
+            } else {
+                node = access;
+            }
+            continue;
+        }
+
+        break;
     }
     return node;
 }
 
+/* Unarios: -expr e +expr. O menos e traduzido para (0 - expr), evitando
+   um novo tipo de no na AST (e mantendo o cache N3 compativel). */
+static NGAstNode* parse_unary(NGParser* p) {
+    if (match(p, NG_TOK_MINUS)) {
+        int line = p->previous.line;
+        int col = p->previous.column;
+        NGAstNode* operand = parse_unary(p);
+        if (!operand) return NULL;
+        NGAstNode* zero = ng_ast_new(NG_AST_EXPR_LITERAL, line, col);
+        zero->as.literal_expr.value = ng_val_number(0);
+        NGAstNode* bin = ng_ast_new(NG_AST_EXPR_BINARY, line, col);
+        bin->as.binary_expr.op = NG_TOK_MINUS;
+        bin->as.binary_expr.left = zero;
+        bin->as.binary_expr.right = operand;
+        return bin;
+    }
+    if (match(p, NG_TOK_PLUS)) {
+        return parse_unary(p);
+    }
+    return parse_primary(p);
+}
+
 static NGAstNode* parse_multiplicative(NGParser* p) {
-    NGAstNode* left = parse_primary(p);
+    NGAstNode* left = parse_unary(p);
     if (!left) return NULL;
     while (match(p, NG_TOK_STAR) || match(p, NG_TOK_SLASH) || match(p, NG_TOK_PERCENT)) {
         int op = p->previous.type;
-        NGAstNode* right = parse_primary(p);
+        NGAstNode* right = parse_unary(p);
         NGAstNode* bin = ng_ast_new(NG_AST_EXPR_BINARY, left->line, left->column);
         bin->as.binary_expr.op = op;
         bin->as.binary_expr.left = left;

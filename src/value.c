@@ -51,6 +51,8 @@ NGValue ng_val_clone(const NGValue* val) {
     NGValue copy = *val;
     if (val->type == NG_VAL_STRING && val->as.string) {
         copy.as.string = strdup(val->as.string);
+    } else if (val->type == NG_VAL_TABLE && val->as.table) {
+        ng_table_retain(val->as.table);
     } else if (val->type == NG_VAL_FUNCTION) {
         copy.as.func.name = val->as.func.name ? strdup(val->as.func.name) : NULL;
         copy.as.func.param_count = val->as.func.param_count;
@@ -75,6 +77,11 @@ void ng_val_free(NGValue* val) {
     if (val->type == NG_VAL_STRING && val->as.string) {
         free(val->as.string);
         val->as.string = NULL;
+    } else if (val->type == NG_VAL_TABLE) {
+        if (val->as.table) {
+            ng_table_release(val->as.table);
+            val->as.table = NULL;
+        }
     } else if (val->type == NG_VAL_FUNCTION) {
         if (val->as.func.name) {
             free(val->as.func.name);
@@ -133,7 +140,8 @@ void ng_val_print(const NGValue* val) {
             if (is_array) {
                 NGValue len_val;
                 size_t length = 0;
-                if (ng_table_get(table, "length", &len_val) && len_val.type == NG_VAL_NUMBER) {
+                if (ng_table_get(table, "length", &len_val) && len_val.type == NG_VAL_NUMBER &&
+                    len_val.as.number > 0) {
                     length = (size_t)len_val.as.number;
                 }
                 for (size_t i = 0; i < length; i++) {

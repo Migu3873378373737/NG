@@ -13,16 +13,22 @@
 static char* read_file(const char* path) {
     FILE* f = fopen(path, "rb");
     if (!f) return NULL;
-    fseek(f, 0, SEEK_END);
+    if (fseek(f, 0, SEEK_END) != 0) {
+        fclose(f);
+        return NULL;
+    }
     long size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    char* buffer = (char*)malloc(size + 1);
+    if (size < 0 || fseek(f, 0, SEEK_SET) != 0) {
+        fclose(f);
+        return NULL;
+    }
+    char* buffer = (char*)malloc((size_t)size + 1);
     if (!buffer) {
         fclose(f);
         return NULL;
     }
-    fread(buffer, 1, size, f);
-    buffer[size] = '\0';
+    size_t read_count = fread(buffer, 1, (size_t)size, f);
+    buffer[read_count] = '\0';
     fclose(f);
     return buffer;
 }

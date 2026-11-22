@@ -27,12 +27,22 @@ static NGValue ng_fs_read(NGInterpreter* interp, NGValue* args, size_t argc) {
     if (argc < 1 || args[0].type != NG_VAL_STRING) return ng_val_null();
     FILE* f = fopen(args[0].as.string, "rb");
     if (!f) return ng_val_null();
-    fseek(f, 0, SEEK_END);
+    if (fseek(f, 0, SEEK_END) != 0) {
+        fclose(f);
+        return ng_val_null();
+    }
     long sz = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    char* b = (char*)malloc(sz + 1);
-    fread(b, 1, sz, f);
-    b[sz] = '\0';
+    if (sz < 0 || fseek(f, 0, SEEK_SET) != 0) {
+        fclose(f);
+        return ng_val_null();
+    }
+    char* b = (char*)malloc((size_t)sz + 1);
+    if (!b) {
+        fclose(f);
+        return ng_val_null();
+    }
+    size_t read_count = fread(b, 1, (size_t)sz, f);
+    b[read_count] = '\0';
     fclose(f);
     NGValue v = ng_val_string(b);
     free(b);
@@ -92,14 +102,37 @@ static void load_fs(NGInterpreter* interp) {
 /* 2. path */
 static NGValue ng_path_join(NGInterpreter* interp, NGValue* args, size_t argc) {
     (void)interp;
-    char buf[1024] = {0};
+    size_t len = 0;
+    size_t cap = 64;
+    char* buf = (char*)malloc(cap);
+    if (!buf) return ng_val_null();
+    buf[0] = '\0';
+
     for (size_t i = 0; i < argc; i++) {
-        if (args[i].type == NG_VAL_STRING) {
-            if (buf[0] != '\0' && buf[strlen(buf)-1] != '/') strcat(buf, "/");
-            strcat(buf, args[i].as.string);
+        if (args[i].type != NG_VAL_STRING || !args[i].as.string) continue;
+        const char* part = args[i].as.string;
+        size_t part_len = strlen(part);
+        size_t need = len + part_len + 2;
+        if (need > cap) {
+            while (cap < need) cap *= 2;
+            char* grown = (char*)realloc(buf, cap);
+            if (!grown) {
+                free(buf);
+                return ng_val_null();
+            }
+            buf = grown;
         }
+        if (len > 0 && buf[len - 1] != '/') {
+            buf[len++] = '/';
+            buf[len] = '\0';
+        }
+        memcpy(buf + len, part, part_len + 1);
+        len += part_len;
     }
-    return ng_val_string(buf);
+
+    NGValue v = ng_val_string(buf);
+    free(buf);
+    return v;
 }
 
 static NGValue ng_path_basename(NGInterpreter* interp, NGValue* args, size_t argc) {
@@ -410,8 +443,19 @@ static NGValue ng_process_run(NGInterpreter* interp, NGValue* args, size_t argc)
     if (!p) return ng_val_null();
     char buf[512];
     char* res = strdup("");
+    if (!res) {
+        pclose(p);
+        return ng_val_null();
+    }
     while (fgets(buf, sizeof(buf), p)) {
-        res = (char*)realloc(res, strlen(res) + strlen(buf) + 1);
+        size_t need = strlen(res) + strlen(buf) + 1;
+        char* grown = (char*)realloc(res, need);
+        if (!grown) {
+            free(res);
+            pclose(p);
+            return ng_val_null();
+        }
+        res = grown;
         strcat(res, buf);
     }
     pclose(p);

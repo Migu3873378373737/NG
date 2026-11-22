@@ -434,7 +434,9 @@ static NGValue native_sqlite_columns(NGInterpreter* interp, NGValue* args, size_
         NGValue name;
         if (row.type == NG_VAL_TABLE && row.as.table &&
             ng_table_get(row.as.table, "name", &name)) {
-            ng_array_push(names, name); /* name ja e uma copia */
+            /* ng_table_get devolve uma referencia interna: clona antes que a
+               linha (e seus valores) seja liberada. */
+            ng_array_push(names, ng_val_clone(&name));
         }
         ng_val_free(&row);
     }
@@ -686,5 +688,8 @@ void ng_sqlite_module_load(NGInterpreter* interp) {
 #endif
 
     ng_env_set(interp->globals, "SQLite", ng_val_table(module));
+    /* Dois nomes apontam para a mesma tabela: cada binding possui uma
+       referencia propria para evitar liberacao dupla. */
+    ng_table_retain(module);
     ng_env_set(interp->globals, "SQLite3", ng_val_table(module));
 }

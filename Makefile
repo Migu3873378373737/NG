@@ -80,6 +80,7 @@ test: $(TARGET)
 	@./$(TARGET) executar testes/29_json_basico.ng
 	@./$(TARGET) executar testes/30_print_avancado.ng
 	@./$(TARGET) executar testes/31_info_diag.ng
+	@./$(TARGET) executar testes/32_correcoes.ng
 	@echo "== Todos os testes concluidos com sucesso! =="
 
 test-loop: $(TARGET)

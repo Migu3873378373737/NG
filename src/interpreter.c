@@ -33,11 +33,26 @@ static bool ng_value_is_array(const NGValue* value) {
            flag.type == NG_VAL_BOOL && flag.as.boolean;
 }
 
+static bool ng_value_truthy(const NGValue* value) {
+    if (!value) return false;
+    switch (value->type) {
+        case NG_VAL_NULL:    return false;
+        case NG_VAL_BOOL:    return value->as.boolean;
+        case NG_VAL_NUMBER:  return value->as.number != 0.0;
+        case NG_VAL_STRING:  return value->as.string && value->as.string[0] != '\0';
+        case NG_VAL_TABLE:   return value->as.table && value->as.table->count > 0;
+        case NG_VAL_FUNCTION:
+        case NG_VAL_NATIVE_FUNC:
+            return true;
+    }
+    return false;
+}
+
 static size_t ng_array_length(const NGValue* array) {
     NGValue len_val;
     if (array && array->type == NG_VAL_TABLE && array->as.table &&
         ng_table_get(array->as.table, "length", &len_val) &&
-        len_val.type == NG_VAL_NUMBER) {
+        len_val.type == NG_VAL_NUMBER && len_val.as.number > 0) {
         return (size_t)len_val.as.number;
     }
     return 0;
@@ -61,6 +76,10 @@ NGValue ng_interp_call_func(NGInterpreter* interp, const NGValue* func, NGValue*
         NGEnv* prev_env = interp->current_env;
         interp->current_env = local_env;
         NGValue ret = ng_val_null();
+        /* Retorno deterministico: uma funcao sem Y definido retorna null,
+           em vez de herdar o valor de Y de uma chamada anterior. */
+        ng_val_free(&interp->reg_y);
+        interp->reg_y = ng_val_null();
         if (func->as.func.body) {
             ng_interp_run(interp, func->as.func.body);
             ret = ng_val_clone(&interp->reg_y);
@@ -103,7 +122,9 @@ static bool execute_statement(NGInterpreter* interp, NGAstNode* node) {
 
         case NG_AST_STMT_ASSIGN: {
             NGValue v = eval_expression(interp, node->as.assign_stmt.value);
-            ng_env_set(interp->current_env, node->as.assign_stmt.name, v);
+            /* Atualiza o escopo onde a variavel ja existe (ex.: global dentro
+               de uma funcao); caso contrario, cria no escopo atual. */
+            ng_env_assign(interp->current_env, node->as.assign_stmt.name, v);
             return true;
         }
 
@@ -111,6 +132,7 @@ static bool execute_statement(NGInterpreter* interp, NGAstNode* node) {
             /* Resolve the table object first */
             NGValue tbl_val;
             bool tbl_found = false;
+            bool owns_table = false;
             if (node->as.table_set.table &&
                 node->as.table_set.table->type == NG_AST_EXPR_IDENTIFIER) {
                 tbl_found = ng_env_get(interp->current_env,
@@ -119,21 +141,21 @@ static bool execute_statement(NGInterpreter* interp, NGAstNode* node) {
             } else {
                 tbl_val = eval_expression(interp, node->as.table_set.table);
                 tbl_found = true;
+                owns_table = true;
             }
             if (!tbl_found || tbl_val.type != NG_VAL_TABLE || !tbl_val.as.table) {
+                if (owns_table) ng_val_free(&tbl_val);
                 return true;
             }
             NGValue field_val = eval_expression(interp, node->as.table_set.value);
             ng_table_set(tbl_val.as.table, node->as.table_set.field, field_val);
+            if (owns_table) ng_val_free(&tbl_val);
             return true;
         }
 
         case NG_AST_STMT_IF: {
             NGValue cond = eval_expression(interp, node->as.if_stmt.condition);
-            bool is_true = false;
-            if (cond.type == NG_VAL_BOOL) is_true = cond.as.boolean;
-            else if (cond.type == NG_VAL_NUMBER) is_true = (cond.as.number != 0.0);
-            else if (cond.type == NG_VAL_STRING && cond.as.string) is_true = (strlen(cond.as.string) > 0);
+            bool is_true = ng_value_truthy(&cond);
             ng_val_free(&cond);
 
             if (is_true) {
@@ -153,9 +175,7 @@ static bool execute_statement(NGInterpreter* interp, NGAstNode* node) {
         case NG_AST_STMT_WHILE: {
             while (true) {
                 NGValue cond = eval_expression(interp, node->as.while_stmt.condition);
-                bool is_true = false;
-                if (cond.type == NG_VAL_BOOL) is_true = cond.as.boolean;
-                else if (cond.type == NG_VAL_NUMBER) is_true = (cond.as.number != 0.0);
+                bool is_true = ng_value_truthy(&cond);
                 ng_val_free(&cond);
                 
                 if (!is_true) break;
@@ -296,6 +316,14 @@ static NGValue eval_expression(NGInterpreter* interp, NGAstNode* node) {
                 } else if (index.type == NG_VAL_STRING && index.as.string) {
                     if (ng_table_get(target.as.table, index.as.string, &field)) result = ng_val_clone(&field);
                 }
+            } else if (target.type == NG_VAL_STRING && target.as.string &&
+                       index.type == NG_VAL_NUMBER) {
+                long long idx = (long long)index.as.number;
+                size_t len = strlen(target.as.string);
+                if (idx >= 0 && (size_t)idx < len) {
+                    char ch[2] = { target.as.string[idx], '\0' };
+                    result = ng_val_string(ch);
+                }
             }
             ng_val_free(&target);
             ng_val_free(&index);
@@ -328,7 +356,7 @@ static NGValue eval_expression(NGInterpreter* interp, NGAstNode* node) {
                     case NG_TOK_PERCENT:
                         if (r.as.number == 0) {
                             if (getenv("NG_DIAG")) {
-                                fprintf(stderr, "[NG-408] Diagnostico: modulo por zero; resultado substituido por 0.\\n");
+                                fprintf(stderr, "[NG-408] Diagnostico: modulo por zero; resultado substituido por 0.\n");
                             }
                             res = ng_val_number(0);
                         } else {
@@ -390,101 +418,87 @@ static NGValue eval_expression(NGInterpreter* interp, NGAstNode* node) {
 
         case NG_AST_EXPR_TABLE_GET: {
             NGValue tbl = eval_expression(interp, node->as.table_get.table);
-            if (tbl.type != NG_VAL_TABLE || !tbl.as.table) {
-                return ng_val_null();
+            NGValue result = ng_val_null();
+            if (tbl.type == NG_VAL_TABLE && tbl.as.table) {
+                NGValue field_val;
+                if (ng_table_get(tbl.as.table, node->as.table_get.field, &field_val)) {
+                    result = ng_val_clone(&field_val);
+                }
             }
-            NGValue field_val;
-            if (ng_table_get(tbl.as.table, node->as.table_get.field, &field_val)) {
-                return ng_val_clone(&field_val);
-            }
-            return ng_val_null();
+            ng_val_free(&tbl);
+            return result;
         }
 
         case NG_AST_EXPR_CALL: {
             NGTable* prev_receiver = interp->receiver_table;
-            if (node->as.call_expr.callee && node->as.call_expr.callee->type == NG_AST_EXPR_TABLE_GET) {
-                NGValue rec_val = eval_expression(interp, node->as.call_expr.callee->as.table_get.table);
-                if (rec_val.type == NG_VAL_TABLE) {
-                    interp->receiver_table = rec_val.as.table;
+            NGAstNode* callee_node = node->as.call_expr.callee;
+
+            /* Para chamadas de metodo (obj.metodo(...)), avalia o receptor
+               uma unica vez e mantem vivo enquanto o metodo executa. */
+            NGValue receiver = ng_val_null();
+            NGValue callee = ng_val_null();
+            if (callee_node && callee_node->type == NG_AST_EXPR_TABLE_GET) {
+                receiver = eval_expression(interp, callee_node->as.table_get.table);
+                if (receiver.type == NG_VAL_TABLE && receiver.as.table) {
+                    interp->receiver_table = receiver.as.table;
+                    NGValue field_val;
+                    if (ng_table_get(receiver.as.table,
+                                     callee_node->as.table_get.field, &field_val)) {
+                        callee = ng_val_clone(&field_val);
+                    }
+                }
+            } else {
+                callee = eval_expression(interp, callee_node);
+            }
+
+            size_t arg_count = node->as.call_expr.arg_count;
+            NGValue* args = NULL;
+            if (arg_count > 0) {
+                args = (NGValue*)malloc(sizeof(NGValue) * arg_count);
+                if (!args) {
+                    ng_val_free(&callee);
+                    ng_val_free(&receiver);
+                    interp->receiver_table = prev_receiver;
+                    return ng_val_null();
+                }
+                for (size_t i = 0; i < arg_count; i++) {
+                    args[i] = eval_expression(interp, node->as.call_expr.args[i]);
                 }
             }
 
-            NGValue callee = eval_expression(interp, node->as.call_expr.callee);
+            NGValue result = ng_val_null();
+            bool called = false;
 
-            /* Se o callee for uma tabela com __call ou novo, chama o metodo correspondente */
+            /* Tabela chamavel: __call / novo / Novo */
             if (callee.type == NG_VAL_TABLE && callee.as.table) {
                 NGValue call_method;
                 if (ng_table_get(callee.as.table, "__call", &call_method) ||
                     ng_table_get(callee.as.table, "novo", &call_method) ||
                     ng_table_get(callee.as.table, "Novo", &call_method)) {
                     interp->receiver_table = callee.as.table;
-                    size_t arg_count = node->as.call_expr.arg_count;
-                    NGValue* args = NULL;
-                    if (arg_count > 0) {
-                        args = (NGValue*)malloc(sizeof(NGValue) * arg_count);
-                        for (size_t i = 0; i < arg_count; i++) {
-                            args[i] = eval_expression(interp, node->as.call_expr.args[i]);
-                        }
-                    }
-                    NGValue result = ng_interp_call_func(interp, &call_method, args, arg_count);
-                    for (size_t i = 0; i < arg_count; i++) {
-                        ng_val_free(&args[i]);
-                    }
-                    free(args);
-                    ng_val_free(&callee);
-                    interp->receiver_table = prev_receiver;
-                    return result;
+                    result = ng_interp_call_func(interp, &call_method, args, arg_count);
+                    called = true;
                 }
             }
 
-            if (callee.type == NG_VAL_NATIVE_FUNC) {
-                /* Evaluate arguments */
-                size_t arg_count = node->as.call_expr.arg_count;
-                NGValue* args = NULL;
-                if (arg_count > 0) {
-                    args = (NGValue*)malloc(sizeof(NGValue) * arg_count);
-                    for (size_t i = 0; i < arg_count; i++) {
-                        args[i] = eval_expression(interp, node->as.call_expr.args[i]);
-                    }
-                }
-                NGValue result = ng_val_null();
-                if (callee.as.native_func.fn) {
-                    result = callee.as.native_func.fn(interp, args, arg_count);
-                }
-                for (size_t i = 0; i < arg_count; i++) {
-                    ng_val_free(&args[i]);
-                }
-                free(args);
-                ng_val_free(&callee);
-                interp->receiver_table = prev_receiver;
-                return result;
+            if (!called && (callee.type == NG_VAL_NATIVE_FUNC || callee.type == NG_VAL_FUNCTION)) {
+                result = ng_interp_call_func(interp, &callee, args, arg_count);
+                called = true;
             }
 
-            if (callee.type != NG_VAL_FUNCTION) {
+            if (!called) {
                 ng_error_print(NG_ERR_UNDEFINED_FUNC, "Funcao Nao Encontrada", interp->current_file, node->line, node->column,
                                "Tentativa de chamar um identificador que nao e uma funcao valida.", "Verifique o nome da funcao.");
-                ng_val_free(&callee);
-                interp->receiver_table = prev_receiver;
-                return ng_val_null();
             }
-            NGEnv* local_env = ng_env_new(interp->globals);
-            for (size_t i = 0; i < node->as.call_expr.arg_count && i < callee.as.func.param_count; i++) {
-                NGValue arg_val = eval_expression(interp, node->as.call_expr.args[i]);
-                ng_env_set(local_env, callee.as.func.params[i], arg_val);
+
+            for (size_t i = 0; i < arg_count; i++) {
+                ng_val_free(&args[i]);
             }
-            NGEnv* prev_env = interp->current_env;
-            interp->current_env = local_env;
-            NGValue ret = ng_val_null();
-            if (callee.as.func.body) {
-                ng_interp_run(interp, callee.as.func.body);
-                /* Return value via Y register */
-                ret = ng_val_clone(&interp->reg_y);
-            }
-            interp->current_env = prev_env;
-            ng_env_free(local_env);
+            free(args);
             ng_val_free(&callee);
+            ng_val_free(&receiver);
             interp->receiver_table = prev_receiver;
-            return ret;
+            return result;
         }
 
         case NG_AST_EXPR_FUNC: {

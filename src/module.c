@@ -11,13 +11,13 @@
 static char* read_module_source(const char* path) {
     FILE* f = fopen(path, "rb");
     if (!f) return NULL;
-    fseek(f, 0, SEEK_END);
+    if (fseek(f, 0, SEEK_END) != 0) { fclose(f); return NULL; }
     long sz = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    char* b = (char*)malloc(sz + 1);
+    if (sz < 0 || fseek(f, 0, SEEK_SET) != 0) { fclose(f); return NULL; }
+    char* b = (char*)malloc((size_t)sz + 1);
     if (!b) { fclose(f); return NULL; }
-    fread(b, 1, sz, f);
-    b[sz] = '\0';
+    size_t read_count = fread(b, 1, (size_t)sz, f);
+    b[read_count] = '\0';
     fclose(f);
     return b;
 }
@@ -41,14 +41,6 @@ bool ng_module_load_into_env(const char* module_name, NGInterpreter* interp) {
     }
     if (!src) {
         snprintf(path, sizeof(path), "libs/%s.ng", mname);
-        src = read_module_source(path);
-    }
-    if (!src) {
-        snprintf(path, sizeof(path), "/storage/emulated/0/oi/libs/%s/index.ng", mname);
-        src = read_module_source(path);
-    }
-    if (!src) {
-        snprintf(path, sizeof(path), "/storage/emulated/0/oi/NG-modulos/%s/index.ng", mname);
         src = read_module_source(path);
     }
 

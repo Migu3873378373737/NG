@@ -19,7 +19,8 @@ void ng_array_push(NGTable* array, NGValue value) {
     }
     NGValue len_val;
     size_t length = 0;
-    if (ng_table_get(array, "length", &len_val) && len_val.type == NG_VAL_NUMBER) {
+    if (ng_table_get(array, "length", &len_val) && len_val.type == NG_VAL_NUMBER &&
+        len_val.as.number > 0) {
         length = (size_t)len_val.as.number;
     }
     char key[32];
@@ -32,7 +33,7 @@ size_t ng_array_length(const NGValue* array) {
     NGValue len_val;
     if (ng_value_is_array(array) &&
         ng_table_get(array->as.table, "length", &len_val) &&
-        len_val.type == NG_VAL_NUMBER) {
+        len_val.type == NG_VAL_NUMBER && len_val.as.number > 0) {
         return (size_t)len_val.as.number;
     }
     return 0;
