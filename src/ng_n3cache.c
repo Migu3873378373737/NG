@@ -48,7 +48,7 @@ static void ensure_cache_dir(void) {
 static void get_cache_path(const char* filepath, char* out_path, size_t max_len) {
     char hex[65];
     ng_sha256_hex((const unsigned char*)filepath, strlen(filepath), hex);
-    snprintf(out_path, max_len, "%s/%.16s.n3c", N3_CACHE_DIR, hex);
+    snprintf(out_path, max_len, "%s/%.12s.n3c", N3_CACHE_DIR, hex);
 }
 
 bool n3_cache_is_valid(const char* filepath) {
@@ -60,8 +60,26 @@ bool n3_cache_is_valid(const char* filepath) {
     return true;
 }
 
+/* Conta entradas simples no diretorio do cache (para aplicar o limite). */
+static size_t count_cache_entries(void) {
+    DIR* d = opendir(N3_CACHE_DIR);
+    if (!d) return 0;
+    struct dirent* entry;
+    size_t count = 0;
+    while ((entry = readdir(d)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
+        count++;
+    }
+    closedir(d);
+    return count;
+}
+
 bool n3_cache_store(const char* filepath, const char* compiled_blob, size_t size) {
     ensure_cache_dir();
+    /* Limite simples de entradas: estoura o cache se atingir o maximo. */
+    if (count_cache_entries() >= N3_CACHE_MAX_ENTRIES) {
+        n3_cache_clean();
+    }
     char cpath[256];
     get_cache_path(filepath, cpath, sizeof(cpath));
     FILE* f = fopen(cpath, "wb");

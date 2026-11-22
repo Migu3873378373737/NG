@@ -10,6 +10,43 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* ============================================================
+ * Dynamic V (Invicta) - arquitetura de execucao em duas fases:
+ *
+ *   FASE PREPARACAO (N3 Cache - caminho MISS/HIT):
+ *     - HIT:   V-unit cacheado encontrado -> deserializa e retorna o
+ *             programa. Direto ao executor, sem lexer/parser (rota rapida).
+ *     - MISS:  lexer + parser -> serializa V-unit -> persiste no cache.
+ *
+ *   FASE EXECUCAO:
+ *     Interpretador sobre o V-unit (AST deserializada/compilada).
+ * ========================================================= */
+static NGAstNode* v_prepare_program(const char* filepath, const char* source,
+                                   bool store_compiled, bool* out_error) {
+    *out_error = false;
+    NGAstNode* program = n3_cache_load_ast(filepath, source);
+    if (program) {
+        /* ROTA DIRETA VIA HIT: sem trabalho pesado de lex/parse. */
+        return program;
+    }
+
+    NGLexer lexer;
+    ng_lexer_init(&lexer, source, filepath);
+    NGParser parser;
+    ng_parser_init(&parser, &lexer, filepath);
+    program = ng_parser_parse_program(&parser);
+    ng_parser_cleanup(&parser);
+    if (parser.has_error) {
+        ng_ast_free(program);
+        *out_error = true;
+        return NULL;
+    }
+    if (store_compiled) {
+        n3_cache_store_ast(filepath, source, program);
+    }
+    return program;
+}
+
 static char* read_file(const char* path) {
     FILE* f = fopen(path, "rb");
     if (!f) return NULL;
@@ -101,31 +138,15 @@ int main(int argc, char** argv) {
             return 1;
         }
 
-        NGAstNode* program = NULL;
+        /* Dynamic V: divisao FASE PREPARACAO (N3 HIT/MISS) -> FASE EXECUCAO. */
+        bool v_error = false;
+        NGAstNode* program = v_prepare_program(filepath, source,
+                                                (strcmp(cmd, "executar") == 0 || strcmp(cmd, "compilar") == 0),
+                                                &v_error);
 
-        if (strcmp(cmd, "executar") == 0) {
-            program = n3_cache_load_ast(filepath, source);
-        }
-
-        if (!program) {
-            NGLexer lexer;
-            ng_lexer_init(&lexer, source, filepath);
-
-            NGParser parser;
-            ng_parser_init(&parser, &lexer, filepath);
-
-            program = ng_parser_parse_program(&parser);
-            ng_parser_cleanup(&parser);
-
-            if (parser.has_error) {
-                ng_ast_free(program);
-                free(source);
-                return 1;
-            }
-
-            if (strcmp(cmd, "executar") == 0 || strcmp(cmd, "compilar") == 0) {
-                n3_cache_store_ast(filepath, source, program);
-            }
+        if (v_error) {
+            free(source);
+            return 1;
         }
 
         if (strcmp(cmd, "verificar") == 0) {

@@ -612,6 +612,14 @@ static NGAstNode* parse_statement(NGParser* p) {
             node->as.table_get.table = id_node;
             node->as.table_get.field = field;
 
+            /* Nome.campo(...) — metodo chamado sobre o campo: TABLE_GET + CALL */
+            if (match(p, NG_TOK_LPAREN)) {
+                NGAstNode* call = ng_ast_new(NG_AST_EXPR_CALL, line, col);
+                call->as.call_expr.callee = node;
+                parse_call_arguments(p, call);
+                return parse_postfix(p, call);
+            }
+
             while (match(p, NG_TOK_DOT)) {
                 if (!match(p, NG_TOK_IDENTIFIER)) {
                     error_at_current(p, NG_ERR_SYNTAX, "Erro de Sintaxe",
