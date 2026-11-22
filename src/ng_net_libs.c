@@ -302,6 +302,21 @@ static char* transpile_ng_code(const char* src, const char* lang) {
                     strcat(out, "\n");
                     p = end + 1;
                 }
+            } else if (*p == '#') {
+                const char* eol = strchr(p, '\n');
+                size_t n = eol ? (size_t)(eol - p) : strlen(p);
+                strcat(out, "--");
+                if (n > 0) strncat(out, p + 1, n - 1);
+                strcat(out, "\n");
+                p = eol ? eol + 1 : p + n;
+            } else if (strncmp(p, "G ", 2) == 0 && (p == src || p[-1] == '\n')) {
+                strcat(out, "print(");
+                p += 2;
+                const char* end = strchr(p, '\n');
+                if (!end) end = p + strlen(p);
+                strncat(out, p, end - p);
+                strcat(out, ");\n");
+                p = *end ? end + 1 : end;
             } else if (*p == ']') {
                 strcat(out, "end\n");
                 p++;
