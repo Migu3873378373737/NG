@@ -42,7 +42,7 @@ else
     CFLAGS += -DNG_NO_SQLITE
 endif
 
-SRC = src/main.c src/lexer.c src/parser.c src/ast.c src/runtime.c src/value.c src/interpreter.c src/module.c src/ng_native_module.c src/ng_json.c src/ng_http.c src/ng_http_client.c src/ng_net_libs.c src/ng_stdlib.c src/ng_n3cache.c src/repl.c src/ng_process.c src/ng_dependency.c src/ng_interop.c src/ng_collection.c src/ng_sqlite.c src/ng_print.c
+SRC = src/main.c src/lexer.c src/parser.c src/ast.c src/runtime.c src/value.c src/interpreter.c src/module.c src/ng_native_module.c src/ng_json.c src/ng_http.c src/ng_http_client.c src/ng_net_libs.c src/ng_transpiler_lua.c src/ng_stdlib.c src/ng_n3cache.c src/repl.c src/ng_process.c src/ng_dependency.c src/ng_interop.c src/ng_collection.c src/ng_sqlite.c src/ng_print.c
 BINDIR = bin
 TARGET = $(BINDIR)/ng
 

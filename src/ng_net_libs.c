@@ -9,6 +9,7 @@
 #include "ng_value.h"
 #include "ng_json.h"
 #include "ng_n3cache.h"
+#include "ng_transpiler_lua.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -336,7 +337,7 @@ static char* transpile_ng_code(const char* src, const char* lang) {
 static NGValue native_mylang_transpile(NGInterpreter* interp, NGValue* args, size_t argc) {
     (void)interp;
     if (argc < 2 || args[0].type != NG_VAL_STRING || args[1].type != NG_VAL_STRING) return ng_val_null();
-    char* t = transpile_ng_code(args[0].as.string, args[1].as.string);
+    char* t = ng_net_libs_transpile(args[0].as.string, args[1].as.string);
     NGValue v = ng_val_string(t);
     free(t);
     return v;
@@ -345,6 +346,7 @@ static NGValue native_mylang_transpile(NGInterpreter* interp, NGValue* args, siz
 /* Cache de sessao para transpilacoes por backend (backend Lua). */
 static NGValue native_mylang_exec(NGInterpreter* interp, NGValue* args, size_t argc);
 static char* transpile_ng_code(const char* src, const char* lang);
+static NGValue ng_run_code_in_lang(const char* lang, const char* code);
 
 #define NG_LUA_CACHE_MAX_ENTRIES 32
 typedef struct { char hash[65]; char* code; } NG_LuaCacheEntry;
@@ -373,6 +375,18 @@ static void ng_lua_cache_put(const char* hash, char* code) {
     }
 }
 
+static void ng_lua_cache_remove(const char* hash) {
+    for (size_t i = 0; i < NG_LUA_CACHE_MAX_ENTRIES; i++) {
+        if (g_lua_cache[i].code && strcmp(g_lua_cache[i].hash, hash) == 0) {
+            free(g_lua_cache[i].code);
+            g_lua_cache[i].code = NULL;
+            g_lua_cache[i].hash[0] = '\0';
+            g_lua_cache_count--;
+            return;
+        }
+    }
+}
+
 void ng_lua_cache_clear(void) {
     for (size_t i = 0; i < NG_LUA_CACHE_MAX_ENTRIES; i++) {
         if (g_lua_cache[i].code) {
@@ -386,6 +400,11 @@ void ng_lua_cache_clear(void) {
 
 char* ng_net_libs_transpile(const char* source, const char* lang) {
     if (!source || !lang) return NULL;
+    if (strcmp(lang, "lua") == 0) {
+        /* Backend Lua: usa o transpilador dedicado NG -> Lua (buffer alocado). */
+        size_t len = 0;
+        return ng_transpile_to_lua(source, &len);
+    }
     return transpile_ng_code(source, lang);
 }
 
@@ -398,42 +417,42 @@ NGValue ng_net_libs_exec_source(const char* source, const char* lang, bool use_c
     ng_sha256_hex((const unsigned char*)source, strlen(source), hash);
     char* code = NULL;
     bool cached = false;
+    size_t code_len = 0;
     if (use_cache) {
         cached = ng_lua_cache_find(hash, &code);
     }
     if (!cached) {
-        code = transpile_ng_code(source, lang);
+        /* Backend Lua: transpila via ng_transpile_to_lua (buffer alocado, free pelo chamador). */
+        code = ng_transpile_to_lua(source, &code_len);
         if (use_cache) ng_lua_cache_put(hash, code);
     }
-    NGValue pass[2];
-    pass[0] = ng_val_string(lang);
-    pass[1] = ng_val_string(code);
-    NGValue result = native_mylang_exec(NULL, pass, 2);
-    if (!cached) free(code);
+    NGValue result = ng_run_code_in_lang(lang, code);
+    if (!cached) {
+        if (use_cache) {
+            /* ng_lua_cache_put assumiu o ownership do buffer: libera via cache. */
+            ng_lua_cache_remove(hash);
+        } else {
+            free(code);
+        }
+    }
     return result;
 }
 
-static NGValue native_mylang_exec(NGInterpreter* interp, NGValue* args, size_t argc) {
-    (void)interp;
-    if (argc < 2 || args[0].type != NG_VAL_STRING || args[1].type != NG_VAL_STRING) return ng_val_null();
-    const char* lang = args[0].as.string;
-    const char* code = args[1].as.string;
-
-    char* transpiled = transpile_ng_code(code, lang);
-
-    char tmppath[128];
-    snprintf(tmppath, sizeof(tmppath), "/tmp/ng_exec_%d.%s", getpid(), lang);
+static NGValue ng_run_code_in_lang(const char* lang, const char* code) {
+    if (!lang || !code) return ng_val_string("");
+    char tmppath[256];
+    const char* tmp_dir = getenv("TMPDIR");
+    if (!tmp_dir || !tmp_dir[0]) tmp_dir = "/tmp";
+    snprintf(tmppath, sizeof(tmppath), "%s/ng_exec_%d.%s", tmp_dir, getpid(), lang);
     FILE* tf = fopen(tmppath, "w");
     if (!tf) {
         snprintf(tmppath, sizeof(tmppath), "ng_exec_%d.%s", getpid(), lang);
         tf = fopen(tmppath, "w");
     }
     if (tf) {
-        fputs(transpiled, tf);
+        fputs(code, tf);
         fclose(tf);
     }
-    free(transpiled);
-
     char cmd[256];
     if (strcmp(lang, "python") == 0 || strcmp(lang, "py") == 0) {
         snprintf(cmd, sizeof(cmd), "python3 %s 2>&1 || python %s 2>&1", tmppath, tmppath);
@@ -468,6 +487,26 @@ static NGValue native_mylang_exec(NGInterpreter* interp, NGValue* args, size_t a
 
     NGValue v = ng_val_string(result);
     free(result);
+    return v;
+}
+
+static NGValue native_mylang_exec(NGInterpreter* interp, NGValue* args, size_t argc) {
+    (void)interp;
+    if (argc < 2 || args[0].type != NG_VAL_STRING || args[1].type != NG_VAL_STRING) return ng_val_null();
+    const char* lang = args[0].as.string;
+    const char* code = args[1].as.string;
+
+    /* Backend Lua: transpila via ng_transpile_to_lua (buffer alocado, liberado aqui). */
+    char* transpiled = NULL;
+    size_t tlen = 0;
+    if (strcmp(lang, "lua") == 0) {
+        transpiled = ng_transpile_to_lua(code, &tlen);
+    } else {
+        transpiled = transpile_ng_code(code, lang);
+    }
+
+    NGValue v = ng_run_code_in_lang(lang, transpiled);
+    free(transpiled);
     return v;
 }
 
