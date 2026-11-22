@@ -14,6 +14,7 @@ void ng_interp_init(NGInterpreter* interp, const char* filename, bool is_subinte
     interp->current_file = filename;
     interp->is_subinterpreter = is_subinterpreter;
     interp->receiver_table = NULL;
+    interp->diag_enabled = getenv("NG_DIAG") != NULL;
 }
 
 void ng_interp_cleanup(NGInterpreter* interp) {
@@ -165,7 +166,7 @@ static bool execute_statement(NGInterpreter* interp, NGAstNode* node) {
             } else if (node->as.if_stmt.else_block) {
                 return ng_interp_run(interp, node->as.if_stmt.else_block);
             }
-            if (!is_true && getenv("NG_DIAG")) {
+            if (!is_true && interp->diag_enabled) {
                 fprintf(stderr, "[NG-407] Diagnostico: condicao falsa; bloco Se nao executado.\n"
                                 "Sugestao: verifique a condicao ou use Senao.\n");
             }
@@ -205,7 +206,7 @@ static bool execute_statement(NGInterpreter* interp, NGAstNode* node) {
             NGValue saved_value = had_previous ? ng_val_clone(&previous_value) : ng_val_null();
 
             size_t length = ng_array_length(&collection);
-            if (length == 0 && getenv("NG_DIAG")) {
+            if (length == 0 && interp->diag_enabled) {
                 fprintf(stderr, "[NG-407] Diagnostico: lista vazia; bloco Loop nao sera executado.\n"
                                 "Sugestao: verifique a colecao antes de iterar.\n");
             }
@@ -361,7 +362,7 @@ static NGValue eval_expression(NGInterpreter* interp, NGAstNode* node) {
                     case NG_TOK_STAR:     res = ng_val_number(l.as.number * r.as.number); break;
                     case NG_TOK_PERCENT:
                         if (r.as.number == 0) {
-                            if (getenv("NG_DIAG")) {
+                            if (interp->diag_enabled) {
                                 fprintf(stderr, "[NG-408] Diagnostico: modulo por zero; resultado substituido por 0.\n");
                             }
                             res = ng_val_number(0);
@@ -371,7 +372,7 @@ static NGValue eval_expression(NGInterpreter* interp, NGAstNode* node) {
                         break;
                     case NG_TOK_SLASH:
                         if (r.as.number == 0) {
-                            if (getenv("NG_DIAG")) {
+                            if (interp->diag_enabled) {
                                 fprintf(stderr, "[NG-407] Diagnostico: divisao por zero; resultado substituido por 0.\n"
                                                 "Sugestao: verifique o denominador antes de dividir.\n");
                             }
