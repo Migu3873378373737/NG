@@ -337,6 +337,7 @@ static NGAstNode* deserialize_ast(N3Reader* r) {
             node->as.func_stmt.name = r_str(r);
             uint32_t pc = r_u32(r);
             node->as.func_stmt.param_count = pc;
+            node->as.func_stmt.param_capacity = pc;
             node->as.func_stmt.params = pc ? (char**)malloc(sizeof(char*) * pc) : NULL;
             for (uint32_t i = 0; i < pc; i++) {
                 node->as.func_stmt.params[i] = r_str(r);
@@ -375,6 +376,7 @@ static NGAstNode* deserialize_ast(N3Reader* r) {
             node->as.call_expr.callee = deserialize_ast(r);
             uint32_t ac = r_u32(r);
             node->as.call_expr.arg_count = ac;
+            node->as.call_expr.arg_capacity = ac;
             node->as.call_expr.args = ac ? (NGAstNode**)malloc(sizeof(NGAstNode*) * ac) : NULL;
             for (uint32_t i = 0; i < ac; i++) {
                 node->as.call_expr.args[i] = deserialize_ast(r);
@@ -394,6 +396,7 @@ static NGAstNode* deserialize_ast(N3Reader* r) {
             node->as.func_expr.name = r_str(r);
             uint32_t pc = r_u32(r);
             node->as.func_expr.param_count = pc;
+            node->as.func_expr.param_capacity = pc;
             node->as.func_expr.params = pc ? (char**)malloc(sizeof(char*) * pc) : NULL;
             for (uint32_t i = 0; i < pc; i++) {
                 node->as.func_expr.params[i] = r_str(r);

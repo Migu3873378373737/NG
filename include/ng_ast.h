@@ -68,6 +68,7 @@ typedef struct NGAstNode {
             char* name;
             char** params;
             size_t param_count;
+            size_t param_capacity;
             struct NGAstNode* body;
         } func_stmt;
 
@@ -94,6 +95,7 @@ typedef struct NGAstNode {
             struct NGAstNode* callee;
             struct NGAstNode** args;
             size_t arg_count;
+            size_t arg_capacity;
         } call_expr;
 
         struct {
@@ -111,6 +113,7 @@ typedef struct NGAstNode {
             char* name;
             char** params;
             size_t param_count;
+            size_t param_capacity;
             struct NGAstNode* body;
         } func_expr;
 

@@ -27,9 +27,14 @@ NGTable* ng_table_new(size_t initial_size);
 void ng_table_free(NGTable* table);
 void ng_table_retain(NGTable* table);
 void ng_table_release(NGTable* table);
-bool ng_table_set(NGTable* table, const char* key, NGValue value);
-bool ng_table_get(NGTable* table, const char* key, NGValue* out_val);
-bool ng_table_unset(NGTable* table, const char* key);
+bool ng_table_set(NGTable* restrict table, const char* key, NGValue value);
+bool ng_table_get(NGTable* restrict table, const char* key, NGValue* out_val);
+bool ng_table_unset(NGTable* restrict table, const char* key);
+
+/* Devolve a chave canonica de um indice. Para 0..9 usa literais estaticos,
+   evitando snprintf/alocacao em loops densos; fora desse intervalo formata
+   em buf (que pertence ao chamador). */
+const char* ng_index_key(long long index, char* buf, size_t buf_size);
 
 NGEnv* ng_env_new(NGEnv* parent);
 void ng_env_free(NGEnv* env);

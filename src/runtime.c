@@ -1,6 +1,19 @@
 #include "ng_runtime.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+static const char* const g_small_index_keys[10] = {
+    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"
+};
+
+const char* ng_index_key(long long index, char* buf, size_t buf_size) {
+    if (index >= 0 && index < 10) {
+        return g_small_index_keys[index];
+    }
+    snprintf(buf, buf_size, "%lld", index);
+    return buf;
+}
 
 static unsigned long hash_str(const char* str) {
     unsigned long hash = 5381;
@@ -56,7 +69,7 @@ void ng_table_free(NGTable* table) {
     ng_table_release(table);
 }
 
-bool ng_table_set(NGTable* table, const char* key, NGValue value) {
+bool ng_table_set(NGTable* restrict table, const char* key, NGValue value) {
     if (!table || !key) return false;
     if (table->size == 0 || !table->buckets) return false;
     unsigned long h = hash_str(key) % table->size;
@@ -83,7 +96,7 @@ bool ng_table_set(NGTable* table, const char* key, NGValue value) {
     return true;
 }
 
-bool ng_table_get(NGTable* table, const char* key, NGValue* out_val) {
+bool ng_table_get(NGTable* restrict table, const char* key, NGValue* out_val) {
     if (!table || !key) return false;
     unsigned long h = hash_str(key) % table->size;
     NGEntry* entry = table->buckets[h];
@@ -97,7 +110,7 @@ bool ng_table_get(NGTable* table, const char* key, NGValue* out_val) {
     return false;
 }
 
-bool ng_table_unset(NGTable* table, const char* key) {
+bool ng_table_unset(NGTable* restrict table, const char* key) {
     if (!table || !key) return false;
     unsigned long h = hash_str(key) % table->size;
     NGEntry** link = &table->buckets[h];
@@ -153,31 +166,24 @@ bool ng_env_set(NGEnv* env, const char* key, NGValue value) {
     return ng_table_set(&env->table, key, value);
 }
 
-static bool ng_env_has(NGEnv* env, const char* key) {
-    if (!env || !key) return false;
-    unsigned long h = hash_str(key) % env->table.size;
-    NGEntry* entry = env->table.buckets[h];
-    while (entry) {
-        if (strcmp(entry->key, key) == 0) return true;
-        entry = entry->next;
-    }
-    return false;
-}
-
 void ng_env_assign(NGEnv* env, const char* key, NGValue value) {
     if (!env || !key) {
         ng_val_free(&value);
         return;
     }
-    if (ng_env_has(env, key)) {
-        ng_env_set(env, key, value);
-        return;
+    /* Uma unica passagem pela cadeia de escopos: no acerto substitui direto,
+       evitando duplo hash/strcmp de ng_env_has + ng_env_set. */
+    for (NGEnv* scope = env; scope; scope = scope->parent) {
+        unsigned long h = hash_str(key) % scope->table.size;
+        for (NGEntry* entry = scope->table.buckets[h]; entry; entry = entry->next) {
+            if (strcmp(entry->key, key) == 0) {
+                ng_val_free(&entry->value);
+                entry->value = value;
+                return;
+            }
+        }
     }
-    if (env->parent) {
-        ng_env_assign(env->parent, key, value);
-        return;
-    }
-    ng_env_set(env, key, value);
+    ng_table_set(&env->table, key, value);
 }
 
 bool ng_env_get(NGEnv* env, const char* key, NGValue* out_val) {

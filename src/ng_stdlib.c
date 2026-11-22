@@ -44,9 +44,7 @@ static NGValue ng_fs_read(NGInterpreter* interp, NGValue* args, size_t argc) {
     size_t read_count = fread(b, 1, (size_t)sz, f);
     b[read_count] = '\0';
     fclose(f);
-    NGValue v = ng_val_string(b);
-    free(b);
-    return v;
+    return ng_val_string_take(b);
 }
 
 static NGValue ng_fs_write(NGInterpreter* interp, NGValue* args, size_t argc) {
@@ -130,9 +128,7 @@ static NGValue ng_path_join(NGInterpreter* interp, NGValue* args, size_t argc) {
         len += part_len;
     }
 
-    NGValue v = ng_val_string(buf);
-    free(buf);
-    return v;
+    return ng_val_string_take(buf);
 }
 
 static NGValue ng_path_basename(NGInterpreter* interp, NGValue* args, size_t argc) {
@@ -370,9 +366,7 @@ static NGValue ng_b64_encode(NGInterpreter* interp, NGValue* args, size_t argc) 
         out[o++] = (i + 2 < len) ? b64_table[triple & 0x3F] : '=';
     }
     out[o] = '\0';
-    NGValue v = ng_val_string(out);
-    free(out);
-    return v;
+    return ng_val_string_take(out);
 }
 
 static NGValue ng_hex_encode(NGInterpreter* interp, NGValue* args, size_t argc) {
@@ -383,9 +377,7 @@ static NGValue ng_hex_encode(NGInterpreter* interp, NGValue* args, size_t argc) 
     char* out = (char*)malloc(len * 2 + 1);
     for (size_t i = 0; i < len; i++) sprintf(out + i*2, "%02x", d[i]);
     out[len*2] = '\0';
-    NGValue v = ng_val_string(out);
-    free(out);
-    return v;
+    return ng_val_string_take(out);
 }
 
 static void load_codecs(NGInterpreter* interp) {
@@ -459,9 +451,7 @@ static NGValue ng_process_run(NGInterpreter* interp, NGValue* args, size_t argc)
         strcat(res, buf);
     }
     pclose(p);
-    NGValue v = ng_val_string(res);
-    free(res);
-    return v;
+    return ng_val_string_take(res);
 }
 
 static void load_process_thread(NGInterpreter* interp) {

@@ -31,6 +31,11 @@ static char advance(NGLexer* l) {
     return c;
 }
 
+static bool text_equals(const char* text, size_t len, const char* word) {
+    size_t word_len = strlen(word);
+    return len == word_len && memcmp(text, word, len) == 0;
+}
+
 static bool skip_whitespace_and_comments(NGLexer* l) {
     bool skipped = false;
     while (l->cursor < l->length) {
@@ -75,19 +80,20 @@ NGToken ng_lexer_next_token(NGLexer* l) {
 
     char c = peek(l);
 
-    // Delimitadores de Bloco e Pontuação
-    if (c == '[') { advance(l); tok.type = NG_TOK_LBRACKET; tok.text = strdup("["); return tok; }
-    if (c == ']') { advance(l); tok.type = NG_TOK_RBRACKET; tok.text = strdup("]"); return tok; }
-    if (c == '(') { advance(l); tok.type = NG_TOK_LPAREN;   tok.text = strdup("("); return tok; }
-    if (c == ')') { advance(l); tok.type = NG_TOK_RPAREN;   tok.text = strdup(")"); return tok; }
-    if (c == '@') { advance(l); tok.type = NG_TOK_AT;       tok.text = strdup("@"); return tok; }
-    if (c == '.') { advance(l); tok.type = NG_TOK_DOT;      tok.text = strdup("."); return tok; }
-    if (c == ',') { advance(l); tok.type = NG_TOK_COMMA;    tok.text = strdup(","); return tok; }
-    if (c == '+') { advance(l); tok.type = NG_TOK_PLUS;     tok.text = strdup("+"); return tok; }
-    if (c == '-') { advance(l); tok.type = NG_TOK_MINUS;    tok.text = strdup("-"); return tok; }
-    if (c == '*') { advance(l); tok.type = NG_TOK_STAR;     tok.text = strdup("*"); return tok; }
-    if (c == '/') { advance(l); tok.type = NG_TOK_SLASH;    tok.text = strdup("/"); return tok; }
-    if (c == '%') { advance(l); tok.type = NG_TOK_PERCENT;  tok.text = strdup("%"); return tok; }
+    // Delimitadores de Bloco e Pontuação: texto nao e necessario, o tipo
+    // do token basta para o parser (evita uma alocacao por pontuacao).
+    if (c == '[') { advance(l); tok.type = NG_TOK_LBRACKET; return tok; }
+    if (c == ']') { advance(l); tok.type = NG_TOK_RBRACKET; return tok; }
+    if (c == '(') { advance(l); tok.type = NG_TOK_LPAREN;   return tok; }
+    if (c == ')') { advance(l); tok.type = NG_TOK_RPAREN;   return tok; }
+    if (c == '@') { advance(l); tok.type = NG_TOK_AT;       return tok; }
+    if (c == '.') { advance(l); tok.type = NG_TOK_DOT;      return tok; }
+    if (c == ',') { advance(l); tok.type = NG_TOK_COMMA;    return tok; }
+    if (c == '+') { advance(l); tok.type = NG_TOK_PLUS;     return tok; }
+    if (c == '-') { advance(l); tok.type = NG_TOK_MINUS;    return tok; }
+    if (c == '*') { advance(l); tok.type = NG_TOK_STAR;     return tok; }
+    if (c == '/') { advance(l); tok.type = NG_TOK_SLASH;    return tok; }
+    if (c == '%') { advance(l); tok.type = NG_TOK_PERCENT;  return tok; }
 
     // Operadores relacionais e de atribuição
     if (c == '=') {
@@ -95,10 +101,8 @@ NGToken ng_lexer_next_token(NGLexer* l) {
         if (peek(l) == '=') {
             advance(l);
             tok.type = NG_TOK_EQ;
-            tok.text = strdup("==");
         } else {
             tok.type = NG_TOK_ASSIGN;
-            tok.text = strdup("=");
         }
         return tok;
     }
@@ -107,11 +111,9 @@ NGToken ng_lexer_next_token(NGLexer* l) {
         if (peek(l) == '=') {
             advance(l);
             tok.type = NG_TOK_NEQ;
-            tok.text = strdup("!=");
             return tok;
         }
         tok.type = NG_TOK_INVALID;
-        tok.text = strdup("!");
         return tok;
     }
     if (c == '<') {
@@ -119,10 +121,8 @@ NGToken ng_lexer_next_token(NGLexer* l) {
         if (peek(l) == '=') {
             advance(l);
             tok.type = NG_TOK_LTE;
-            tok.text = strdup("<=");
         } else {
             tok.type = NG_TOK_LT;
-            tok.text = strdup("<");
         }
         return tok;
     }
@@ -131,10 +131,8 @@ NGToken ng_lexer_next_token(NGLexer* l) {
         if (peek(l) == '=') {
             advance(l);
             tok.type = NG_TOK_GTE;
-            tok.text = strdup(">=");
         } else {
             tok.type = NG_TOK_GT;
-            tok.text = strdup(">");
         }
         return tok;
     }
@@ -195,35 +193,42 @@ NGToken ng_lexer_next_token(NGLexer* l) {
             advance(l);
         }
         size_t len = l->cursor - start;
-        char* id = (char*)malloc(len + 1);
-        memcpy(id, l->source + start, len);
-        id[len] = '\0';
+        const char* text = l->source + start;
 
-        tok.text = id;
-        if (strcmp(id, "Print") == 0) tok.type = NG_TOK_KW_PRINT;
-        else if (strcmp(id, "G") == 0) tok.type = NG_TOK_KW_G;
-        else if (strcmp(id, "Y") == 0) tok.type = NG_TOK_KW_Y;
-        else if (strcmp(id, "Se") == 0) tok.type = NG_TOK_KW_SE;
-        else if (strcmp(id, "Senao") == 0 || strcmp(id, "Senão") == 0) tok.type = NG_TOK_KW_SENAO;
-        else if (strcmp(id, "Enquanto") == 0) tok.type = NG_TOK_KW_ENQUANTO;
-        else if (strcmp(id, "Funcao") == 0 || strcmp(id, "Função") == 0 ||
-                 strcmp(id, "funcao") == 0 || strcmp(id, "função") == 0) tok.type = NG_TOK_KW_FUNCAO;
-        else if (strcmp(id, "Importar") == 0 || strcmp(id, "importar") == 0) tok.type = NG_TOK_KW_IMPORTAR;
-        else if (strcmp(id, "como") == 0) tok.type = NG_TOK_KW_COMO;
-        else if (strcmp(id, "true") == 0 || strcmp(id, "Verdadeiro") == 0) tok.type = NG_TOK_KW_TRUE;
-        else if (strcmp(id, "false") == 0 || strcmp(id, "Falso") == 0) tok.type = NG_TOK_KW_FALSE;
-        else if (strcmp(id, "null") == 0 || strcmp(id, "Nulo") == 0) tok.type = NG_TOK_KW_NULL;
-        else if (strcmp(id, "fim") == 0 || strcmp(id, "Fim") == 0) tok.type = NG_TOK_KW_FIM;
-        else if (strcmp(id, "Loop") == 0 || strcmp(id, "loop") == 0) tok.type = NG_TOK_KW_LOOP;
-        else if (strcmp(id, "in") == 0 || strcmp(id, "In") == 0) tok.type = NG_TOK_KW_IN;
-        else tok.type = NG_TOK_IDENTIFIER;
+        NGTokenType type = NG_TOK_IDENTIFIER;
+        if (text_equals(text, len, "Print")) type = NG_TOK_KW_PRINT;
+        else if (text_equals(text, len, "G")) type = NG_TOK_KW_G;
+        else if (text_equals(text, len, "Y")) type = NG_TOK_KW_Y;
+        else if (text_equals(text, len, "Se")) type = NG_TOK_KW_SE;
+        else if (text_equals(text, len, "Senao") || text_equals(text, len, "Senão")) type = NG_TOK_KW_SENAO;
+        else if (text_equals(text, len, "Enquanto")) type = NG_TOK_KW_ENQUANTO;
+        else if (text_equals(text, len, "Funcao") || text_equals(text, len, "Função") ||
+                 text_equals(text, len, "funcao") || text_equals(text, len, "função")) type = NG_TOK_KW_FUNCAO;
+        else if (text_equals(text, len, "Importar") || text_equals(text, len, "importar")) type = NG_TOK_KW_IMPORTAR;
+        else if (text_equals(text, len, "como")) type = NG_TOK_KW_COMO;
+        else if (text_equals(text, len, "true") || text_equals(text, len, "Verdadeiro")) type = NG_TOK_KW_TRUE;
+        else if (text_equals(text, len, "false") || text_equals(text, len, "Falso")) type = NG_TOK_KW_FALSE;
+        else if (text_equals(text, len, "null") || text_equals(text, len, "Nulo")) type = NG_TOK_KW_NULL;
+        else if (text_equals(text, len, "fim") || text_equals(text, len, "Fim")) type = NG_TOK_KW_FIM;
+        else if (text_equals(text, len, "Loop") || text_equals(text, len, "loop")) type = NG_TOK_KW_LOOP;
+        else if (text_equals(text, len, "in") || text_equals(text, len, "In")) type = NG_TOK_KW_IN;
 
+        tok.type = type;
+        if (type == NG_TOK_IDENTIFIER) {
+            char* id = (char*)malloc(len + 1);
+            if (!id) {
+                tok.type = NG_TOK_INVALID;
+                return tok;
+            }
+            memcpy(id, text, len);
+            id[len] = '\0';
+            tok.text = id;
+        }
         return tok;
     }
 
     // Token não reconhecido
     advance(l);
     tok.type = NG_TOK_INVALID;
-    tok.text = strdup("?");
     return tok;
 }

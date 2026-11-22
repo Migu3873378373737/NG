@@ -135,8 +135,7 @@ static NGValue parse_json_array(JsonParser* p) {
     while (p->pos < p->len) {
         NGValue val = parse_json_value(p);
         char idx_str[32];
-        snprintf(idx_str, sizeof(idx_str), "%zu", index);
-        ng_table_set(tbl, idx_str, val);
+        ng_table_set(tbl, ng_index_key((long long)index, idx_str, sizeof(idx_str)), val);
         index++;
 
         skip_ws(p);
@@ -201,9 +200,7 @@ static NGValue parse_json_value(JsonParser* p) {
 
     if (c == '"') {
         char* s = parse_json_string(p);
-        NGValue v = ng_val_string(s ? s : "");
-        if (s) free(s);
-        return v;
+        return ng_val_string_take(s);
     }
     if (c == '{') {
         return parse_json_object(p);
@@ -341,9 +338,8 @@ static void stringify_value(StrBuf* b, const NGValue* val) {
                 for (size_t i = 0; i < arr_len; i++) {
                     if (i > 0) buf_append(b, ",");
                     char k[32];
-                    snprintf(k, sizeof(k), "%zu", i);
                     NGValue item;
-                    if (ng_table_get(tbl, k, &item)) {
+                    if (ng_table_get(tbl, ng_index_key((long long)i, k, sizeof(k)), &item)) {
                         stringify_value(b, &item);
                     } else {
                         buf_append(b, "null");
@@ -456,9 +452,8 @@ static NGValue native_json_stringify(NGInterpreter* interp, NGValue* args, size_
         return ng_val_string("null");
     }
     char* str = ng_json_stringify(&args[0]);
-    NGValue res = ng_val_string(str ? str : "null");
-    if (str) free(str);
-    return res;
+    if (!str) return ng_val_string("null");
+    return ng_val_string_take(str);
 }
 
 static NGValue native_json_read_file(NGInterpreter* interp, NGValue* args, size_t argc) {
@@ -587,9 +582,8 @@ static NGValue native_json_pretty(NGInterpreter* interp, NGValue* args, size_t a
     (void)interp;
     char* compact = (argc >= 1) ? ng_json_stringify(&args[0]) : strdup("null");
     char* pretty = ng_json_pretty(compact ? compact : "null");
-    NGValue result = ng_val_string(pretty ? pretty : "");
+    NGValue result = ng_val_string_take(pretty);
     free(compact);
-    free(pretty);
     return result;
 }
 

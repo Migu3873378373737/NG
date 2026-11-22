@@ -24,8 +24,7 @@ void ng_array_push(NGTable* array, NGValue value) {
         length = (size_t)len_val.as.number;
     }
     char key[32];
-    snprintf(key, sizeof(key), "%zu", length);
-    ng_table_set(array, key, value); /* ng_table_set assume a propriedade */
+    ng_table_set(array, ng_index_key((long long)length, key, sizeof(key)), value);
     ng_table_set(array, "length", ng_val_number((double)(length + 1)));
 }
 
@@ -49,9 +48,9 @@ bool ng_value_is_array(const NGValue* value) {
 NGValue ng_array_get(const NGValue* array, size_t index) {
     if (!ng_value_is_array(array)) return ng_val_null();
     char key[32];
-    snprintf(key, sizeof(key), "%zu", index);
     NGValue item;
-    if (ng_table_get(array->as.table, key, &item)) {
+    if (ng_table_get(array->as.table,
+                     ng_index_key((long long)index, key, sizeof(key)), &item)) {
         return ng_val_clone(&item);
     }
     return ng_val_null();

@@ -31,6 +31,13 @@ NGValue ng_val_string(const char* s) {
     return v;
 }
 
+NGValue ng_val_string_take(char* s) {
+    NGValue v;
+    v.type = NG_VAL_STRING;
+    v.as.string = s ? s : strdup("");
+    return v;
+}
+
 NGValue ng_val_table(struct NGTable* t) {
     NGValue v;
     v.type = NG_VAL_TABLE;
@@ -146,9 +153,8 @@ void ng_val_print(const NGValue* val) {
                 }
                 for (size_t i = 0; i < length; i++) {
                     char key[32];
-                    snprintf(key, sizeof(key), "%zu", i);
                     NGValue item;
-                    if (ng_table_get(table, key, &item)) {
+                    if (ng_table_get(table, ng_index_key((long long)i, key, sizeof(key)), &item)) {
                         ng_val_print(&item);
                     } else {
                         printf("null\n");

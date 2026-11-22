@@ -119,9 +119,7 @@ static NGValue native_interop_exec(NGInterpreter* interp, NGValue* args, size_t 
         return ng_val_null();
     }
     char* out = interop_run(args[0].as.string, args[1].as.string, NULL);
-    NGValue result = ng_val_string(out ? out : "");
-    free(out);
-    return result;
+    return ng_val_string_take(out);
 }
 
 static NGValue native_interop_lang(NGInterpreter* interp, NGValue* args, size_t argc,
@@ -129,9 +127,7 @@ static NGValue native_interop_lang(NGInterpreter* interp, NGValue* args, size_t 
     (void)interp;
     if (argc < 1 || args[0].type != NG_VAL_STRING) return ng_val_null();
     char* out = interop_run(lang, args[0].as.string, NULL);
-    NGValue result = ng_val_string(out ? out : "");
-    free(out);
-    return result;
+    return ng_val_string_take(out);
 }
 
 static NGValue native_interop_python(NGInterpreter* i, NGValue* a, size_t n) {
@@ -166,9 +162,8 @@ static NGValue native_interop_to_json(NGInterpreter* interp, NGValue* args, size
     (void)interp;
     if (argc < 1) return ng_val_string("null");
     char* json = ng_json_stringify(&args[0]);
-    NGValue result = ng_val_string(json ? json : "null");
-    free(json);
-    return result;
+    if (!json) return ng_val_string("null");
+    return ng_val_string_take(json);
 }
 
 static NGValue native_interop_from_json(NGInterpreter* interp, NGValue* args, size_t argc) {

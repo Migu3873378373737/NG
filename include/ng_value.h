@@ -43,6 +43,8 @@ NGValue ng_val_null(void);
 NGValue ng_val_bool(bool b);
 NGValue ng_val_number(double n);
 NGValue ng_val_string(const char* s);
+/* Assume a posse de s (que pode ser NULL). Evita uma copia adicional. */
+NGValue ng_val_string_take(char* s);
 NGValue ng_val_table(struct NGTable* t);
 NGValue ng_val_native_func(const char* name, NGValue (*fn)(struct NGInterpreter*, NGValue*, size_t));
 NGValue ng_val_clone(const NGValue* val);

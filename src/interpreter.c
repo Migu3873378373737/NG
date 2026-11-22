@@ -211,10 +211,10 @@ static bool execute_statement(NGInterpreter* interp, NGAstNode* node) {
             }
             for (size_t i = 0; i < length; i++) {
                 char key[32];
-                snprintf(key, sizeof(key), "%zu", i);
+                const char* index_key = ng_index_key((long long)i, key, sizeof(key));
 
                 NGValue item;
-                if (!ng_table_get(collection.as.table, key, &item)) {
+                if (!ng_table_get(collection.as.table, index_key, &item)) {
                     item = ng_val_null();
                 }
                 ng_env_set(interp->current_env, var_name, ng_val_clone(&item));
@@ -295,8 +295,7 @@ static NGValue eval_expression(NGInterpreter* interp, NGAstNode* node) {
             for (size_t i = 0; i < count; i++) {
                 NGValue element = eval_expression(interp, node->as.array_expr.elements[i]);
                 char key[32];
-                snprintf(key, sizeof(key), "%zu", i);
-                ng_table_set(array, key, element);
+                ng_table_set(array, ng_index_key((long long)i, key, sizeof(key)), element);
             }
             ng_table_set(array, "length", ng_val_number((double)count));
             return ng_val_table(array);
@@ -311,9 +310,10 @@ static NGValue eval_expression(NGInterpreter* interp, NGAstNode* node) {
                 /* Índice numérico: lookup via hash */
                 if (index.type == NG_VAL_NUMBER) {
                     char key[32];
-                    snprintf(key, sizeof(key), "%lld", (long long)index.as.number);
                     NGValue field;
-                    if (ng_table_get(target.as.table, key, &field)) {
+                    if (ng_table_get(target.as.table,
+                                     ng_index_key((long long)index.as.number, key, sizeof(key)),
+                                     &field)) {
                         result = ng_val_clone(&field);
                     }
                 } else if (index.type == NG_VAL_STRING && index.as.string) {
@@ -337,7 +337,7 @@ static NGValue eval_expression(NGInterpreter* interp, NGAstNode* node) {
         }
 
         case NG_AST_EXPR_IDENTIFIER: {
-            if (strcmp(node->as.id_expr.name, "Y") == 0) {
+            if (node->as.id_expr.name[0] == 'Y' && node->as.id_expr.name[1] == '\0') {
                 return ng_val_clone(&interp->reg_y);
             }
             NGValue out;
@@ -389,12 +389,17 @@ static NGValue eval_expression(NGInterpreter* interp, NGAstNode* node) {
                     default: break;
                 }
             } else if (l.type == NG_VAL_STRING && r.type == NG_VAL_STRING && node->as.binary_expr.op == NG_TOK_PLUS) {
-                size_t len = strlen(l.as.string) + strlen(r.as.string);
-                char* concat = (char*)malloc(len + 1);
-                strcpy(concat, l.as.string);
-                strcat(concat, r.as.string);
-                res = ng_val_string(concat);
-                free(concat);
+                size_t l_len = strlen(l.as.string);
+                size_t r_len = strlen(r.as.string);
+                char* concat = (char*)malloc(l_len + r_len + 1);
+                if (!concat) {
+                    ng_val_free(&l);
+                    ng_val_free(&r);
+                    return ng_val_null();
+                }
+                memcpy(concat, l.as.string, l_len);
+                memcpy(concat + l_len, r.as.string, r_len + 1);
+                res = ng_val_string_take(concat);
             } else if (node->as.binary_expr.op == NG_TOK_EQ) {
                 /* Compare mixed types: null == null, bool == bool, string == string */
                 if (l.type == NG_VAL_NULL && r.type == NG_VAL_NULL) {

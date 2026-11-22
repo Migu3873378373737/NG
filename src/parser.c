@@ -56,6 +56,60 @@ static NGAstNode* parse_expression(NGParser* p);
 static NGAstNode* parse_statement(NGParser* p);
 static NGAstNode* parse_block(NGParser* p);
 
+/* --- builders com capacidade (evitam realloc por elemento/argumento) --- */
+
+static void ast_program_push(NGAstNode* block, NGAstNode* stmt) {
+    if (block->as.program.count == block->as.program.capacity) {
+        size_t cap = block->as.program.capacity ? block->as.program.capacity * 2 : 8;
+        block->as.program.statements = (NGAstNode**)realloc(
+            block->as.program.statements, sizeof(NGAstNode*) * cap);
+        block->as.program.capacity = cap;
+    }
+    block->as.program.statements[block->as.program.count++] = stmt;
+}
+
+static void ast_array_push(NGAstNode* array, NGAstNode* element) {
+    if (array->as.array_expr.count == array->as.array_expr.capacity) {
+        size_t cap = array->as.array_expr.capacity ? array->as.array_expr.capacity * 2 : 4;
+        array->as.array_expr.elements = (NGAstNode**)realloc(
+            array->as.array_expr.elements, sizeof(NGAstNode*) * cap);
+        array->as.array_expr.capacity = cap;
+    }
+    array->as.array_expr.elements[array->as.array_expr.count++] = element;
+}
+
+static void ast_call_push(NGAstNode* call, NGAstNode* arg) {
+    if (call->as.call_expr.arg_count == call->as.call_expr.arg_capacity) {
+        size_t cap = call->as.call_expr.arg_capacity ? call->as.call_expr.arg_capacity * 2 : 4;
+        call->as.call_expr.args = (NGAstNode**)realloc(
+            call->as.call_expr.args, sizeof(NGAstNode*) * cap);
+        call->as.call_expr.arg_capacity = cap;
+    }
+    call->as.call_expr.args[call->as.call_expr.arg_count++] = arg;
+}
+
+static void ast_params_push(char*** params, size_t* count, size_t* capacity, char* name) {
+    if (*count == *capacity) {
+        size_t cap = *capacity ? *capacity * 2 : 4;
+        *params = (char**)realloc(*params, sizeof(char*) * cap);
+        *capacity = cap;
+    }
+    (*params)[(*count)++] = name;
+}
+
+static void parse_call_arguments(NGParser* p, NGAstNode* call) {
+    if (!check(p, NG_TOK_RPAREN)) {
+        do {
+            ast_call_push(call, parse_expression(p));
+        } while (match(p, NG_TOK_COMMA));
+    }
+    if (!match(p, NG_TOK_RPAREN)) {
+        error_at_current(p, NG_ERR_SYNTAX, "Erro de Sintaxe",
+                         "Esperado ')' apos os argumentos da funcao.",
+                         "Feche os parenteses da chamada.");
+    }
+}
+
 static NGAstNode* parse_primary_base(NGParser* p) {
     int line = p->current.line;
     int col = p->current.column;
@@ -102,13 +156,7 @@ static NGAstNode* parse_primary_base(NGParser* p) {
 
         while (!check(p, NG_TOK_RBRACKET) && !check(p, NG_TOK_EOF)) {
             NGAstNode* element = parse_expression(p);
-            if (element) {
-                node->as.array_expr.count++;
-                node->as.array_expr.elements = (NGAstNode**)realloc(
-                    node->as.array_expr.elements,
-                    sizeof(NGAstNode*) * node->as.array_expr.count);
-                node->as.array_expr.elements[node->as.array_expr.count - 1] = element;
-            }
+            if (element) ast_array_push(node, element);
             if (!match(p, NG_TOK_COMMA)) break;
         }
         if (!match(p, NG_TOK_RBRACKET)) {
@@ -134,14 +182,16 @@ static NGAstNode* parse_primary_base(NGParser* p) {
         fnode->as.func_expr.name = fname;
         fnode->as.func_expr.params = NULL;
         fnode->as.func_expr.param_count = 0;
+        fnode->as.func_expr.param_capacity = 0;
 
         if (match(p, NG_TOK_LPAREN)) {
             if (!check(p, NG_TOK_RPAREN)) {
                 do {
                     if (match(p, NG_TOK_IDENTIFIER)) {
-                        fnode->as.func_expr.param_count++;
-                        fnode->as.func_expr.params = (char**)realloc(fnode->as.func_expr.params, sizeof(char*) * fnode->as.func_expr.param_count);
-                        fnode->as.func_expr.params[fnode->as.func_expr.param_count - 1] = take_token_text(p);
+                        ast_params_push(&fnode->as.func_expr.params,
+                                        &fnode->as.func_expr.param_count,
+                                        &fnode->as.func_expr.param_capacity,
+                                        take_token_text(p));
                     }
                 } while (match(p, NG_TOK_COMMA));
             }
@@ -158,87 +208,13 @@ static NGAstNode* parse_primary_base(NGParser* p) {
         NGAstNode* node = ng_ast_new(NG_AST_EXPR_IDENTIFIER, line, col);
         node->as.id_expr.name = id_name;
 
-        /* Chamada de funcao: id(...) */
         if (match(p, NG_TOK_LPAREN)) {
             NGAstNode* call = ng_ast_new(NG_AST_EXPR_CALL, line, col);
             call->as.call_expr.callee = node;
-            call->as.call_expr.args = NULL;
-            call->as.call_expr.arg_count = 0;
-
-            if (!check(p, NG_TOK_RPAREN)) {
-                do {
-                    call->as.call_expr.arg_count++;
-                    call->as.call_expr.args = (NGAstNode**)realloc(call->as.call_expr.args, sizeof(NGAstNode*) * call->as.call_expr.arg_count);
-                    call->as.call_expr.args[call->as.call_expr.arg_count - 1] = parse_expression(p);
-                } while (match(p, NG_TOK_COMMA));
-            }
-            if (!match(p, NG_TOK_RPAREN)) {
-                error_at_current(p, NG_ERR_SYNTAX, "Erro de Sintaxe", "Esperado ')' apos os argumentos da funcao.", "Feche os parenteses da chamada.");
-            }
-            /* Chain: may have .field(...) after call */
-            while (match(p, NG_TOK_DOT)) {
-                if (match(p, NG_TOK_IDENTIFIER)) {
-                    NGAstNode* tget = ng_ast_new(NG_AST_EXPR_TABLE_GET, line, col);
-                    tget->as.table_get.table = call;
-                    tget->as.table_get.field = take_token_text(p);
-                    call = tget; /* reuse call variable as the chained node */
-                    /* if followed by ( it's a method call */
-                    if (match(p, NG_TOK_LPAREN)) {
-                        NGAstNode* mcall = ng_ast_new(NG_AST_EXPR_CALL, line, col);
-                        mcall->as.call_expr.callee = call;
-                        mcall->as.call_expr.args = NULL;
-                        mcall->as.call_expr.arg_count = 0;
-                        if (!check(p, NG_TOK_RPAREN)) {
-                            do {
-                                mcall->as.call_expr.arg_count++;
-                                mcall->as.call_expr.args = (NGAstNode**)realloc(mcall->as.call_expr.args, sizeof(NGAstNode*) * mcall->as.call_expr.arg_count);
-                                mcall->as.call_expr.args[mcall->as.call_expr.arg_count - 1] = parse_expression(p);
-                            } while (match(p, NG_TOK_COMMA));
-                        }
-                        match(p, NG_TOK_RPAREN);
-                        call = mcall;
-                    }
-                } else {
-                    error_at_current(p, NG_ERR_SYNTAX, "Erro de Sintaxe", "Esperado identificador de campo apos '.'.", "Informe o nome do campo da tabela.");
-                    break;
-                }
-            }
+            parse_call_arguments(p, call);
             return call;
         }
-
-        /* Acesso a membro de tabela: id.campo ou chamada de metodo id.campo(...) */
-        while (match(p, NG_TOK_DOT)) {
-            if (match(p, NG_TOK_IDENTIFIER)) {
-                char* field = take_token_text(p);
-                /* Method call: id.campo(...) */
-                if (match(p, NG_TOK_LPAREN)) {
-                    NGAstNode* tget = ng_ast_new(NG_AST_EXPR_TABLE_GET, line, col);
-                    tget->as.table_get.table = node;
-                    tget->as.table_get.field = field;
-                    NGAstNode* call = ng_ast_new(NG_AST_EXPR_CALL, line, col);
-                    call->as.call_expr.callee = tget;
-                    call->as.call_expr.args = NULL;
-                    call->as.call_expr.arg_count = 0;
-                    if (!check(p, NG_TOK_RPAREN)) {
-                        do {
-                            call->as.call_expr.arg_count++;
-                            call->as.call_expr.args = (NGAstNode**)realloc(call->as.call_expr.args, sizeof(NGAstNode*) * call->as.call_expr.arg_count);
-                            call->as.call_expr.args[call->as.call_expr.arg_count - 1] = parse_expression(p);
-                        } while (match(p, NG_TOK_COMMA));
-                    }
-                    match(p, NG_TOK_RPAREN);
-                    node = call;
-                } else {
-                    NGAstNode* tget = ng_ast_new(NG_AST_EXPR_TABLE_GET, line, col);
-                    tget->as.table_get.table = node;
-                    tget->as.table_get.field = field;
-                    node = tget;
-                }
-            } else {
-                error_at_current(p, NG_ERR_SYNTAX, "Erro de Sintaxe", "Esperado identificador de campo apos '.'.", "Informe o nome do campo da tabela.");
-                break;
-            }
-        }
+        /* Campos, metodos e indices sao resolvidos pelo parse_postfix. */
         return node;
     }
 
@@ -255,30 +231,9 @@ static NGAstNode* parse_primary_base(NGParser* p) {
     return NULL;
 }
 
-static void parse_call_arguments(NGParser* p, NGAstNode* call) {
-    call->as.call_expr.args = NULL;
-    call->as.call_expr.arg_count = 0;
-    if (!check(p, NG_TOK_RPAREN)) {
-        do {
-            call->as.call_expr.arg_count++;
-            call->as.call_expr.args = (NGAstNode**)realloc(
-                call->as.call_expr.args,
-                sizeof(NGAstNode*) * call->as.call_expr.arg_count);
-            call->as.call_expr.args[call->as.call_expr.arg_count - 1] = parse_expression(p);
-        } while (match(p, NG_TOK_COMMA));
-    }
-    if (!match(p, NG_TOK_RPAREN)) {
-        error_at_current(p, NG_ERR_SYNTAX, "Erro de Sintaxe",
-                         "Esperado ')' apos os argumentos da funcao.",
-                         "Feche os parenteses da chamada.");
-    }
-}
-
 /* Pos-fixos encadeados: lista[0], registro["campo"], valor.campo,
    valor.metodo(...), inclusive combinacoes como lista[0].campo. */
-static NGAstNode* parse_primary(NGParser* p) {
-    NGAstNode* node = parse_primary_base(p);
-
+static NGAstNode* parse_postfix(NGParser* p, NGAstNode* node) {
     while (node) {
         /* Em condicoes (Se/Enquanto/Loop) o '[' tambem abre bloco. Um indice
            valido vem colado ao valor (sem espaco), enquanto o bloco costuma
@@ -324,6 +279,10 @@ static NGAstNode* parse_primary(NGParser* p) {
         break;
     }
     return node;
+}
+
+static NGAstNode* parse_primary(NGParser* p) {
+    return parse_postfix(p, parse_primary_base(p));
 }
 
 /* Unarios: -expr e +expr. O menos e traduzido para (0 - expr), evitando
@@ -419,11 +378,7 @@ static NGAstNode* parse_block(NGParser* p) {
     if (is_bracket) {
         while (!check(p, NG_TOK_RBRACKET) && !check(p, NG_TOK_EOF)) {
             NGAstNode* stmt = parse_statement(p);
-            if (stmt) {
-                block->as.program.count++;
-                block->as.program.statements = (NGAstNode**)realloc(block->as.program.statements, sizeof(NGAstNode*) * block->as.program.count);
-                block->as.program.statements[block->as.program.count - 1] = stmt;
-            }
+            if (stmt) ast_program_push(block, stmt);
         }
         if (!match(p, NG_TOK_RBRACKET)) {
             error_at_current(p, NG_ERR_UNCLOSED_BLOCK, "Bloco Nao Fechado", "Bloco aberto com '[' nao foi fechado com ']'.", "Insira ']' para fechar o bloco correspondente.");
@@ -431,11 +386,7 @@ static NGAstNode* parse_block(NGParser* p) {
     } else {
         while (!check(p, NG_TOK_KW_FIM) && !check(p, NG_TOK_EOF) && !check(p, NG_TOK_RPAREN)) {
             NGAstNode* stmt = parse_statement(p);
-            if (stmt) {
-                block->as.program.count++;
-                block->as.program.statements = (NGAstNode**)realloc(block->as.program.statements, sizeof(NGAstNode*) * block->as.program.count);
-                block->as.program.statements[block->as.program.count - 1] = stmt;
-            }
+            if (stmt) ast_program_push(block, stmt);
         }
         match(p, NG_TOK_KW_FIM);
     }
@@ -548,14 +499,16 @@ static NGAstNode* parse_statement(NGParser* p) {
         node->as.func_stmt.name = take_token_text(p);
         node->as.func_stmt.params = NULL;
         node->as.func_stmt.param_count = 0;
+        node->as.func_stmt.param_capacity = 0;
 
         if (match(p, NG_TOK_LPAREN)) {
             if (!check(p, NG_TOK_RPAREN)) {
                 do {
                     if (match(p, NG_TOK_IDENTIFIER)) {
-                        node->as.func_stmt.param_count++;
-                        node->as.func_stmt.params = (char**)realloc(node->as.func_stmt.params, sizeof(char*) * node->as.func_stmt.param_count);
-                        node->as.func_stmt.params[node->as.func_stmt.param_count - 1] = take_token_text(p);
+                        ast_params_push(&node->as.func_stmt.params,
+                                        &node->as.func_stmt.param_count,
+                                        &node->as.func_stmt.param_capacity,
+                                        take_token_text(p));
                     }
                 } while (match(p, NG_TOK_COMMA));
             }
@@ -580,8 +533,13 @@ static NGAstNode* parse_statement(NGParser* p) {
                     const char* sep = (p->previous.type == NG_TOK_SLASH) ? "/" :
                                       (p->previous.type == NG_TOK_MINUS) ? "-" : ".";
                     strncat(mod_buf, sep, sizeof(mod_buf) - strlen(mod_buf) - 1);
-                    if (match(p, NG_TOK_IDENTIFIER) || match(p, NG_TOK_NUMBER)) {
+                    if (match(p, NG_TOK_IDENTIFIER)) {
                         strncat(mod_buf, p->previous.text, sizeof(mod_buf) - strlen(mod_buf) - 1);
+                    } else if (match(p, NG_TOK_NUMBER)) {
+                        char num[32];
+                        snprintf(num, sizeof(num), "%lld",
+                                 (long long)p->previous.number_value);
+                        strncat(mod_buf, num, sizeof(mod_buf) - strlen(mod_buf) - 1);
                     }
                 }
             }
@@ -609,11 +567,10 @@ static NGAstNode* parse_statement(NGParser* p) {
      *   Nome.campo.sub(...)      -> chained method call statement
      */
     if (check(p, NG_TOK_IDENTIFIER)) {
-        /* Peek-ahead: consume identifier, then decide */
-        advance(p); /* consume identifier */
+        advance(p);
         char* name = take_token_text(p);
 
-        /* Simple assignment: Name = expr */
+        /* Nome = expr */
         if (match(p, NG_TOK_ASSIGN)) {
             NGAstNode* node = ng_ast_new(NG_AST_STMT_ASSIGN, line, col);
             node->as.assign_stmt.name = name;
@@ -621,149 +578,73 @@ static NGAstNode* parse_statement(NGParser* p) {
             return node;
         }
 
-        /* Simple call: Name(...) */
+        NGAstNode* id_node = ng_ast_new(NG_AST_EXPR_IDENTIFIER, line, col);
+        id_node->as.id_expr.name = name;
+
+        /* Nome(...) */
         if (match(p, NG_TOK_LPAREN)) {
-            NGAstNode* callee_id = ng_ast_new(NG_AST_EXPR_IDENTIFIER, line, col);
-            callee_id->as.id_expr.name = name;
             NGAstNode* call = ng_ast_new(NG_AST_EXPR_CALL, line, col);
-            call->as.call_expr.callee = callee_id;
-            call->as.call_expr.args = NULL;
-            call->as.call_expr.arg_count = 0;
-            if (!check(p, NG_TOK_RPAREN)) {
-                do {
-                    call->as.call_expr.arg_count++;
-                    call->as.call_expr.args = (NGAstNode**)realloc(call->as.call_expr.args, sizeof(NGAstNode*) * call->as.call_expr.arg_count);
-                    call->as.call_expr.args[call->as.call_expr.arg_count - 1] = parse_expression(p);
-                } while (match(p, NG_TOK_COMMA));
-            }
-            match(p, NG_TOK_RPAREN);
-            return call;
+            call->as.call_expr.callee = id_node;
+            parse_call_arguments(p, call);
+            return parse_postfix(p, call);
         }
 
-        /* Dot-access: Name.field... */
+        /* Nome.campo... (com atribuicao em campo ou chamada de metodo) */
         if (match(p, NG_TOK_DOT)) {
-            /* Build base identifier node */
-            NGAstNode* base_id = ng_ast_new(NG_AST_EXPR_IDENTIFIER, line, col);
-            base_id->as.id_expr.name = name;
-
-            /* Consume first field name */
             if (!match(p, NG_TOK_IDENTIFIER)) {
-                error_at_current(p, NG_ERR_SYNTAX, "Erro de Sintaxe", "Esperado identificador de campo apos '.'.", "Informe o campo.");
-                free(name);
-                ng_ast_free(base_id);
+                error_at_current(p, NG_ERR_SYNTAX, "Erro de Sintaxe",
+                                 "Esperado identificador de campo apos '.'.",
+                                 "Informe o campo.");
+                ng_ast_free(id_node);
                 return NULL;
             }
-            char* field1 = take_token_text(p);
+            char* field = take_token_text(p);
 
-            /* Check if more dots follow to build chain, or assignment, or call */
-            /* First handle: Name.field = expr  (TABLE_SET, single level) */
             if (match(p, NG_TOK_ASSIGN)) {
                 NGAstNode* tset = ng_ast_new(NG_AST_STMT_TABLE_SET, line, col);
-                tset->as.table_set.table = base_id;
-                tset->as.table_set.field = field1;
+                tset->as.table_set.table = id_node;
+                tset->as.table_set.field = field;
                 tset->as.table_set.value = parse_expression(p);
                 return tset;
             }
 
-            /* Name.field(...) - method call */
-            if (match(p, NG_TOK_LPAREN)) {
-                NGAstNode* tget = ng_ast_new(NG_AST_EXPR_TABLE_GET, line, col);
-                tget->as.table_get.table = base_id;
-                tget->as.table_get.field = field1;
-                NGAstNode* call = ng_ast_new(NG_AST_EXPR_CALL, line, col);
-                call->as.call_expr.callee = tget;
-                call->as.call_expr.args = NULL;
-                call->as.call_expr.arg_count = 0;
-                if (!check(p, NG_TOK_RPAREN)) {
-                    do {
-                        call->as.call_expr.arg_count++;
-                        call->as.call_expr.args = (NGAstNode**)realloc(call->as.call_expr.args, sizeof(NGAstNode*) * call->as.call_expr.arg_count);
-                        call->as.call_expr.args[call->as.call_expr.arg_count - 1] = parse_expression(p);
-                    } while (match(p, NG_TOK_COMMA));
-                }
-                match(p, NG_TOK_RPAREN);
-                /* Chain further .field or .method(...) */
-                NGAstNode* node = call;
-                while (match(p, NG_TOK_DOT)) {
-                    if (!match(p, NG_TOK_IDENTIFIER)) break;
-                    char* fn = take_token_text(p);
-                    NGAstNode* tg = ng_ast_new(NG_AST_EXPR_TABLE_GET, line, col);
-                    tg->as.table_get.table = node;
-                    tg->as.table_get.field = fn;
-                    if (match(p, NG_TOK_LPAREN)) {
-                        NGAstNode* mc = ng_ast_new(NG_AST_EXPR_CALL, line, col);
-                        mc->as.call_expr.callee = tg;
-                        mc->as.call_expr.args = NULL;
-                        mc->as.call_expr.arg_count = 0;
-                        if (!check(p, NG_TOK_RPAREN)) {
-                            do {
-                                mc->as.call_expr.arg_count++;
-                                mc->as.call_expr.args = (NGAstNode**)realloc(mc->as.call_expr.args, sizeof(NGAstNode*) * mc->as.call_expr.arg_count);
-                                mc->as.call_expr.args[mc->as.call_expr.arg_count - 1] = parse_expression(p);
-                            } while (match(p, NG_TOK_COMMA));
-                        }
-                        match(p, NG_TOK_RPAREN);
-                        node = mc;
-                    } else {
-                        node = tg;
-                    }
-                }
-                return node;
-            }
+            NGAstNode* node = ng_ast_new(NG_AST_EXPR_TABLE_GET, line, col);
+            node->as.table_get.table = id_node;
+            node->as.table_get.field = field;
 
-            /* Name.field.subfield... build chain then check for = or (...) */
-            {
-                NGAstNode* tget = ng_ast_new(NG_AST_EXPR_TABLE_GET, line, col);
-                tget->as.table_get.table = base_id;
-                tget->as.table_get.field = field1;
-                NGAstNode* node = tget;
-                while (match(p, NG_TOK_DOT)) {
-                    if (!match(p, NG_TOK_IDENTIFIER)) break;
-                    char* fn = take_token_text(p);
-                    /* Check if assignment: table.field.sub = expr  (TABLE_SET on sub) */
-                    if (match(p, NG_TOK_ASSIGN)) {
-                        NGAstNode* tset = ng_ast_new(NG_AST_STMT_TABLE_SET, line, col);
-                        tset->as.table_set.table = node;
-                        tset->as.table_set.field = fn;
-                        tset->as.table_set.value = parse_expression(p);
-                        return tset;
-                    }
-                    if (match(p, NG_TOK_LPAREN)) {
-                        NGAstNode* tg = ng_ast_new(NG_AST_EXPR_TABLE_GET, line, col);
-                        tg->as.table_get.table = node;
-                        tg->as.table_get.field = fn;
-                        NGAstNode* mc = ng_ast_new(NG_AST_EXPR_CALL, line, col);
-                        mc->as.call_expr.callee = tg;
-                        mc->as.call_expr.args = NULL;
-                        mc->as.call_expr.arg_count = 0;
-                        if (!check(p, NG_TOK_RPAREN)) {
-                            do {
-                                mc->as.call_expr.arg_count++;
-                                mc->as.call_expr.args = (NGAstNode**)realloc(mc->as.call_expr.args, sizeof(NGAstNode*) * mc->as.call_expr.arg_count);
-                                mc->as.call_expr.args[mc->as.call_expr.arg_count - 1] = parse_expression(p);
-                            } while (match(p, NG_TOK_COMMA));
-                        }
-                        match(p, NG_TOK_RPAREN);
-                        node = mc;
-                        continue;
-                    }
-                    NGAstNode* tg = ng_ast_new(NG_AST_EXPR_TABLE_GET, line, col);
-                    tg->as.table_get.table = node;
-                    tg->as.table_get.field = fn;
-                    node = tg;
+            while (match(p, NG_TOK_DOT)) {
+                if (!match(p, NG_TOK_IDENTIFIER)) {
+                    error_at_current(p, NG_ERR_SYNTAX, "Erro de Sintaxe",
+                                     "Esperado identificador de campo apos '.'.",
+                                     "Informe o campo.");
+                    break;
                 }
-                return node;
+                char* sub = take_token_text(p);
+
+                if (match(p, NG_TOK_ASSIGN)) {
+                    NGAstNode* tset = ng_ast_new(NG_AST_STMT_TABLE_SET, line, col);
+                    tset->as.table_set.table = node;
+                    tset->as.table_set.field = sub;
+                    tset->as.table_set.value = parse_expression(p);
+                    return tset;
+                }
+
+                NGAstNode* tg = ng_ast_new(NG_AST_EXPR_TABLE_GET, line, col);
+                tg->as.table_get.table = node;
+                tg->as.table_get.field = sub;
+
+                if (match(p, NG_TOK_LPAREN)) {
+                    NGAstNode* call = ng_ast_new(NG_AST_EXPR_CALL, line, col);
+                    call->as.call_expr.callee = tg;
+                    parse_call_arguments(p, call);
+                    return parse_postfix(p, call);
+                }
+                node = tg;
             }
+            return node;
         }
 
-        /* Nothing matched, treat as expression starting with identifier */
-        /* Put name back into an identifier node and fall through to parse_expression */
-        /* Since we can't unget token, build identifier and return as expr */
-        {
-            NGAstNode* id_node = ng_ast_new(NG_AST_EXPR_IDENTIFIER, line, col);
-            id_node->as.id_expr.name = name;
-            return id_node;
-        }
+        return id_node;
     }
 
     return parse_expression(p);
@@ -777,11 +658,7 @@ NGAstNode* ng_parser_parse_program(NGParser* p) {
 
     while (!check(p, NG_TOK_EOF)) {
         NGAstNode* stmt = parse_statement(p);
-        if (stmt) {
-            prog->as.program.count++;
-            prog->as.program.statements = (NGAstNode**)realloc(prog->as.program.statements, sizeof(NGAstNode*) * prog->as.program.count);
-            prog->as.program.statements[prog->as.program.count - 1] = stmt;
-        }
+        if (stmt) ast_program_push(prog, stmt);
     }
     return prog;
 }
