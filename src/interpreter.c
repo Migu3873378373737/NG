@@ -308,13 +308,19 @@ static NGValue eval_expression(NGInterpreter* interp, NGAstNode* node) {
             NGValue result = ng_val_null();
 
             if (target.type == NG_VAL_TABLE && target.as.table) {
-                NGValue field;
+                /* Índice numérico: lookup via hash */
                 if (index.type == NG_VAL_NUMBER) {
                     char key[32];
                     snprintf(key, sizeof(key), "%lld", (long long)index.as.number);
-                    if (ng_table_get(target.as.table, key, &field)) result = ng_val_clone(&field);
+                    NGValue field;
+                    if (ng_table_get(target.as.table, key, &field)) {
+                        result = ng_val_clone(&field);
+                    }
                 } else if (index.type == NG_VAL_STRING && index.as.string) {
-                    if (ng_table_get(target.as.table, index.as.string, &field)) result = ng_val_clone(&field);
+                    NGValue field;
+                    if (ng_table_get(target.as.table, index.as.string, &field)) {
+                        result = ng_val_clone(&field);
+                    }
                 }
             } else if (target.type == NG_VAL_STRING && target.as.string &&
                        index.type == NG_VAL_NUMBER) {
