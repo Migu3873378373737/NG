@@ -6,6 +6,7 @@
 #include "ng_n3cache.h"
 #include "ng_repl.h"
 #include "ng_dependency.h"
+#include "ng_net_libs.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -136,6 +137,27 @@ int main(int argc, char** argv) {
             ng_error_print(NG_ERR_FILE_NOT_FOUND, "Arquivo Nao Encontrado", filepath, 0, 0,
                            "Nao foi possivel abrir o arquivo especificado.", "Verifique o caminho do arquivo '.ng'.");
             return 1;
+        }
+
+        /* Backend de execucao: "c" (padrao, fluxo Dynamic V/N3 Cache) ou "lua"
+           (runtime externo via transpilacao). */
+        const char* backend = "c";
+        for (int i = 3; i < argc; i++) {
+            if (strncmp(argv[i], "--backend=", 10) == 0) {
+                backend = argv[i] + 10;
+            }
+        }
+        const char* backend_env = getenv("NG_BACKEND");
+        if (backend_env && backend_env[0]) backend = backend_env;
+
+        /* Backend Lua: bypass do interpretador AST em C11 (transpila -> runtime Lua). */
+        if (backend && strcmp(backend, "lua") == 0 && strcmp(cmd, "executar") == 0) {
+            NGValue lua_out = ng_net_libs_exec_source(source, "lua", true);
+            const char* out_str = (lua_out.type == NG_VAL_STRING) ? lua_out.as.string : NULL;
+            if (out_str) fputs(out_str, stdout);
+            ng_val_free(&lua_out);
+            free(source);
+            return 0;
         }
 
         /* Dynamic V: divisao FASE PREPARACAO (N3 HIT/MISS) -> FASE EXECUCAO. */

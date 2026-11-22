@@ -49,6 +49,16 @@ bool ng_native_module_load(const char* name, NGInterpreter* interp) {
     return false;
 }
 
+NGValue ng_native_module_invoke(NGInterpreter* interp, const char* module_name, const char* func_name, NGValue* args, size_t argc) {
+    if (!interp || !module_name || !func_name) return ng_val_null();
+    if (!ng_native_module_load(module_name, interp)) return ng_val_null();
+    NGValue module_val;
+    if (!ng_env_get(interp->globals, module_name, &module_val) || module_val.type != NG_VAL_TABLE) return ng_val_null();
+    NGValue fn;
+    if (!ng_table_get(module_val.as.table, func_name, &fn) || fn.type != NG_VAL_NATIVE_FUNC) return ng_val_null();
+    return ng_interp_call_func(interp, &fn, args, argc);
+}
+
 void ng_native_modules_init(void) {
     ng_native_module_register("http", ng_http_module_load);
     ng_native_module_register("https", ng_http_module_load);

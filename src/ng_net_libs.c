@@ -327,6 +327,77 @@ static NGValue native_mylang_transpile(NGInterpreter* interp, NGValue* args, siz
     return v;
 }
 
+/* Cache de sessao para transpilacoes por backend (backend Lua). */
+static NGValue native_mylang_exec(NGInterpreter* interp, NGValue* args, size_t argc);
+static char* transpile_ng_code(const char* src, const char* lang);
+
+#define NG_LUA_CACHE_MAX_ENTRIES 32
+typedef struct { char hash[65]; char* code; } NG_LuaCacheEntry;
+static NG_LuaCacheEntry g_lua_cache[NG_LUA_CACHE_MAX_ENTRIES];
+static size_t g_lua_cache_count = 0;
+
+static bool ng_lua_cache_find(const char* hash, char** out_code) {
+    for (size_t i = 0; i < NG_LUA_CACHE_MAX_ENTRIES; i++) {
+        if (g_lua_cache[i].code && strcmp(g_lua_cache[i].hash, hash) == 0) {
+            *out_code = g_lua_cache[i].code;
+            return true;
+        }
+    }
+    return false;
+}
+
+static void ng_lua_cache_put(const char* hash, char* code) {
+    for (size_t i = 0; i < NG_LUA_CACHE_MAX_ENTRIES; i++) {
+        if (!g_lua_cache[i].code) {
+            strncpy(g_lua_cache[i].hash, hash, 64);
+            g_lua_cache[i].hash[64] = '\0';
+            g_lua_cache[i].code = code;
+            g_lua_cache_count++;
+            return;
+        }
+    }
+}
+
+void ng_lua_cache_clear(void) {
+    for (size_t i = 0; i < NG_LUA_CACHE_MAX_ENTRIES; i++) {
+        if (g_lua_cache[i].code) {
+            free(g_lua_cache[i].code);
+            g_lua_cache[i].code = NULL;
+        }
+        g_lua_cache[i].hash[0] = '\0';
+    }
+    g_lua_cache_count = 0;
+}
+
+char* ng_net_libs_transpile(const char* source, const char* lang) {
+    if (!source || !lang) return NULL;
+    return transpile_ng_code(source, lang);
+}
+
+/* Executa fonte NG no runtime externo `lang` com cache de sessao em memoria
+   (evita recompilacao repetida do mesmo fonte no mesmo processo). */
+NGValue ng_net_libs_exec_source(const char* source, const char* lang, bool use_cache) {
+    NGValue empty = ng_val_string("");
+    if (!source || !lang) return empty;
+    char hash[65];
+    ng_sha256_hex((const unsigned char*)source, strlen(source), hash);
+    char* code = NULL;
+    bool cached = false;
+    if (use_cache) {
+        cached = ng_lua_cache_find(hash, &code);
+    }
+    if (!cached) {
+        code = transpile_ng_code(source, lang);
+        if (use_cache) ng_lua_cache_put(hash, code);
+    }
+    NGValue pass[2];
+    pass[0] = ng_val_string(lang);
+    pass[1] = ng_val_string(code);
+    NGValue result = native_mylang_exec(NULL, pass, 2);
+    if (!cached) free(code);
+    return result;
+}
+
 static NGValue native_mylang_exec(NGInterpreter* interp, NGValue* args, size_t argc) {
     (void)interp;
     if (argc < 2 || args[0].type != NG_VAL_STRING || args[1].type != NG_VAL_STRING) return ng_val_null();
