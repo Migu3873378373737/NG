@@ -2,3 +2,10 @@
 bin/ng
 ng.zip
 *.patch
+
+# Generated and temporary files
+.n3cache/
+bin/ng
+*.zip
+*.sqlite3
+*.patch
