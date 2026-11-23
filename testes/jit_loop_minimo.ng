@@ -1,0 +1,7 @@
+Contador = 0
+
+Enquanto Contador < 2000000 [
+    Contador = Contador + 1
+]
+
+Print Contador

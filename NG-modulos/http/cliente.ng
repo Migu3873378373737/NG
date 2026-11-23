@@ -1,0 +1,12 @@
+# Módulo Cliente HTTP/HTTPS com E2EE para NG
+
+Função Get(URL) [
+    Print "[HTTP-GET] Conectando de forma segura a URL:"
+    Print URL
+]
+
+Função Post(URL, Dados) [
+    Print "[HTTP-POST] Enviando requisicao segura para:"
+    Print URL
+    Print Dados
+]

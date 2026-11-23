@@ -1,0 +1,17 @@
+# Benchmark repetivel de interpretador (NAO e teste de corretude)
+Importar @time
+
+T0 = Time.Now()
+
+Contador = 0
+Enquanto Contador < 20000 [
+    Contador = Contador + 1
+]
+
+Nomes = ["Ana", "João", "José", "Maria", "Ângela"]
+Loop Nome in Nomes [
+    Texto = Nome + "-ok"
+]
+
+T1 = Time.Now()
+Print T1 - T0

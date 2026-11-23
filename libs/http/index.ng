@@ -1,0 +1,10 @@
+# Modulo HTTP Nativo NG
+Importar @http
+
+Função Servidor() [
+    Y = HTTP.Servidor()
+]
+
+Função Requisicao(url) [
+    Y = HTTP.Get(url)
+]

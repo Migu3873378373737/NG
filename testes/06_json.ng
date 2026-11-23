@@ -1,0 +1,15 @@
+# Teste do Modulo JSON Nativo Integrado da NG
+
+Importar @http
+
+Dados = "{\"nome\":\"Miguel\",\"idade\":20,\"ativo\":true}"
+Objeto = JSON.Parse(Dados)
+
+Print "JSON Parsed com sucesso:"
+Print Objeto.nome
+Print Objeto.idade
+Print Objeto.ativo
+
+Serializado = JSON.Stringify(Objeto)
+Print "JSON Serializado:"
+Print Serializado

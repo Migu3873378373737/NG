@@ -1,0 +1,26 @@
+# Informacoes reais do runtime e diagnosticos
+Importar @info
+Importar @diag
+Importar @json
+
+Print "--- informacoes ---"
+Print Info.Versao()
+Print Info.Linguagem()
+Print Info.Runtime()
+Print Info.Compilador()
+Print Info.Arquitetura()
+Print Info.Sistema()
+Print Info.Diretorio()
+Print Info.Memoria()
+
+Print "--- catalogo de bibliotecas ---"
+Modulos = Info.Modulos()
+Print JSON.Tamanho(Modulos)
+Print Modulos[0]
+
+Print "--- diagnosticos ---"
+Print Diag.Condicao(false)
+Print Diag.Colecao([])
+Print Diag.Colecao([1, 2, 3])
+Print Diag.Variavel("variavel_inexistente")
+Print Ajuda.Ajuda()

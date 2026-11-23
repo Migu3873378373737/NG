@@ -1,0 +1,14 @@
+# Biblioteca Padrao: fs
+Importar @fs
+
+Função Ler(caminho) [
+    Y = FS.ReadFile(caminho)
+]
+
+Função Gravar(caminho, dados) [
+    Y = FS.WriteFile(caminho, dados)
+]
+
+Função Existe(caminho) [
+    Y = FS.Exists(caminho)
+]

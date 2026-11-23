@@ -1,0 +1,13 @@
+# Teste do Cliente HTTP Nativo da NG
+
+Importar @http
+
+Print "Testando Cliente HTTP Nativo..."
+
+# Teste de chamada cliente nativa
+Resposta = HTTP.Get("http://httpbin.org/get")
+
+G Resposta.Status
+G Resposta.Ok
+
+Print "Cliente HTTP executado com sucesso."

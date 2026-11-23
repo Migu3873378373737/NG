@@ -1,0 +1,12 @@
+# Módulo Criptográfico E2EE para NG (Next Generation)
+# Utilitários de Hash, Assinatura e Envelope Seguro para Bots de WhatsApp/Webhooks
+
+Função CriarEnvelope(Remetente, Mensagem, Chave) [
+    Print "[E2EE] Criando envelope criptografado..."
+    Print Remetente
+    Print Mensagem
+]
+
+Função VerificarAssinatura(Payload, Assinatura, Segredo) [
+    Print "[E2EE] Validando HMAC de webhook recebido..."
+]

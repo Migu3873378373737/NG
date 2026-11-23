@@ -1,0 +1,10 @@
+# Biblioteca Padrao: env
+Importar @env
+
+Função Obter(chave) [
+    Y = Env.Get(chave)
+]
+
+Função Definir(chave, valor) [
+    Y = Env.Set(chave, valor)
+]

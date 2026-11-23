@@ -1,0 +1,9 @@
+Y = "Primeiro valor"
+G Y
+Y = "Segundo valor"
+G Y
+Y = "Terceiro valor consecutivo"
+G Y
+Y = "Quarto valor consecutivo"
+G Y
+Print "Teste de substituicao repetida de Y concluido com sucesso."

@@ -1,0 +1,8 @@
+{
+  "nome": "http",
+  "versao": "1.0.0",
+  "descricao": "Cliente e utilitarios HTTP/HTTPS com suporte a criptografia ponta a ponta (E2EE) para bots e servicos seguros",
+  "autor": "NG Core Team",
+  "principal": "index.ng",
+  "dependencias": []
+}

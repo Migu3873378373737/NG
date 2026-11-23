@@ -1,409 +1,319 @@
-NG Language Engine
+# NG (Next Generation) Language
 
-NG é uma linguagem de programação experimental e um engine desenvolvido em C, com interpretador próprio, compilação JIT experimental e ferramentas para desenvolvimento.
-
-O projeto busca oferecer um ambiente de execução leve, extensível e multiplataforma, com foco em desempenho, integração nativa e compatibilidade com ambientes Linux e Android.
-
-«🚧 NG está em desenvolvimento ativo. A sintaxe, APIs, módulos, recursos e suporte a plataformas podem sofrer alterações.»
+Linguagem de programação independente, com identidade sintática própria, interpretador nativo, AST modular e CLI construído em **C puro (padrão ISO C11)**.
 
 ---
 
-🚀 Sobre o projeto
+## 1. Estrutura do Projeto
 
-O NG Language Engine é um projeto independente de linguagem de programação que combina um runtime desenvolvido em C com diferentes tecnologias de execução.
-
-O objetivo é construir uma linguagem que possa executar programas em ambientes leves, integrar bibliotecas nativas e evoluir para uma plataforma de desenvolvimento versátil.
-
-Principais recursos
-
-- Engine desenvolvido em C
-- Interpretador baseado em AST
-- Runtime nativo
-- Compilador JIT experimental
-- Transpilação para Lua
-- Arquitetura modular
-- Integração com bibliotecas nativas
-- Suporte a JSON
-- Integração com SQLite
-- Recursos HTTP e networking
-- Testes e benchmarks
-- Suporte ARM64
-- Compatibilidade com ambientes Linux e Android
-
-A disponibilidade de cada recurso depende da versão, compilação e plataforma.
-
----
-
-📱 Plataformas
-
-Plataforma| Status
-Android| Ambiente de desenvolvimento principal
-Termux| Suporte principal
-Linux ARM64| Suporte e testes
-Linux x86_64| Compatibilidade de compilação em testes
-Android com root| Ambiente compatível; root não é obrigatório
-proot| Compatibilidade em testes
-chroot| Compatibilidade em testes
-Windows| Portabilidade futura / ainda não validada
-macOS| Portabilidade futura / ainda não validada
-
-O NG prioriza inicialmente Android/Termux e Linux.
+```
+oi/
+├── Makefile                # Build automatizado para Linux/Android/Windows
+├── include/                # Cabeçalhos da arquitetura C11
+│   ├── ng.h
+│   ├── ng_lexer.h          # Análise léxica e tokens próprios
+│   ├── ng_parser.h         # Análise sintática com blocos [...]
+│   ├── ng_ast.h            # Árvore Sintática Abstrata (AST)
+│   ├── ng_value.h          # Sistema unificado de tipos e valores
+│   ├── ng_runtime.h        # Tabelas de símbolos e escopos
+│   ├── ng_interpreter.h    # Avaliador e runtime nativo
+│   ├── ng_error.h          # Códigos de erro NG-XXX
+│   ├── ng_module.h         # Resolução em NG-modulos/
+│   └── ng_n3cache.h        # Cache N3 e integridade
+├── src/                    # Implementações em C11
+│   ├── main.c              # CLI "ng"
+│   ├── lexer.c
+│   ├── parser.c
+│   ├── ast.c
+│   ├── value.c
+│   ├── runtime.c
+│   ├── interpreter.c
+│   ├── repl.c
+│   ├── ng_process.c
+│   ├── ng_dependency.c
+│   └── ng_interop.c
+├── NG-modulos/             # Módulos centrais da linguagem
+└── testes/                 # Bateria de programas .ng
+    ├── 01_ola_mundo.ng
+    ├── 02_variaveis.ng
+    ├── 03_g_y.ng
+    ├── 04_condicoes.ng
+    └── 05_funcoes.ng
+```
 
 ---
 
-📦 Instalação
+## 2. Como Compilar no Termux / Linux
 
-Android — Termux
+Para compilar o binário `ng`:
 
-1. Instalar o Termux
-
-Recomendamos obter o Termux por uma fonte oficial:
-
-- F-Droid
-- GitHub oficial do Termux
-
-Evite versões antigas distribuídas em lojas desatualizadas.
-
-2. Atualizar o ambiente
-
-pkg update && pkg upgrade
-
-3. Instalar dependências
-
-pkg install git clang make pkg-config openssl libcurl sqlite lua
-
-4. Clonar o repositório
-
-git clone https://github.com/Migu3873378373737/NG.git
-
-5. Entrar no projeto
-
-cd NG
-
-6. Compilar
-
+```bash
 make
+```
 
-Para uma compilação limpa:
+Ou diretamente com o compilador C:
 
-make clean
-make
-
-7. Executar
-
-Utilize o launcher do projeto:
-
-bash ng.sh executar exemplos/hello.ng
-
-O launcher foi projetado para auxiliar na execução em ambientes Android onde o armazenamento compartilhado pode possuir restrições de execução direta de binários.
+```bash
+clang -Wall -Wextra -std=c11 -O2 -Iinclude src/*.c -o bin/ng
+```
 
 ---
 
-🐧 Linux — Debian / Ubuntu
+## 3. Comandos do CLI
 
-1. Instalar dependências
+```bash
+# Iniciar o REPL interativo (sem argumentos)
+./bin/ng
 
-sudo apt update
-sudo apt install git build-essential clang make pkg-config \
-libssl-dev libcurl4-openssl-dev libsqlite3-dev liblua5.4-dev
+# Exibir versão e ajuda
+./bin/ng versao
+./bin/ng ajuda
 
-2. Clonar o repositório
+# Verificar sintaxe sem executar
+./bin/ng verificar testes/01_ola_mundo.ng
 
-git clone https://github.com/Migu3873378373737/NG.git
+# Executar programas NG
+./bin/ng executar testes/01_ola_mundo.ng
+./bin/ng executar testes/03_g_y.ng
+./bin/ng executar testes/04_condicoes.ng
+./bin/ng executar testes/05_funcoes.ng
 
-3. Entrar no diretório
-
-cd NG
-
-4. Compilar
-
-make
-
-5. Executar
-
-Se o binário estiver disponível e o sistema permitir a execução:
-
-./bin/ng executar exemplos/hello.ng
-
-Se necessário, utilize o launcher:
-
-bash ng.sh executar exemplos/hello.ng
-
----
-
-🐧 Arch Linux
-
-Instalar dependências
-
-sudo pacman -S git base-devel clang openssl curl sqlite lua
-
-Clonar
-
-git clone https://github.com/Migu3873378373737/NG.git
-cd NG
-
-Compilar
-
-make
-
-Executar
-
-./bin/ng executar exemplos/hello.ng
-
----
-
-📱 Linux em Android — proot
-
-É possível compilar o NG dentro de distribuições Linux executadas por proot, como Ubuntu ou Debian no Android.
-
-Instale os pacotes de desenvolvimento dentro da distribuição e siga o procedimento de instalação Linux.
-
-git clone https://github.com/Migu3873378373737/NG.git
-cd NG
-make
-
-Execute o programa:
-
-./bin/ng executar exemplos/hello.ng
-
-A disponibilidade de recursos nativos, permissões de memória executável e JIT pode variar de acordo com a distribuição e as limitações do Android.
-
----
-
-🔒 Linux em Android — chroot
-
-Em ambientes chroot, a instalação segue o procedimento Linux convencional.
-
-git clone https://github.com/Migu3873378373737/NG.git
-cd NG
-make
-
-A compilação depende das ferramentas e bibliotecas instaladas dentro do ambiente.
-
-Root não garante automaticamente que todas as operações de memória executável estejam permitidas.
-
----
-
-🪟 Windows
-
-O suporte nativo ao Windows ainda não está oficialmente validado.
-
-Possíveis ambientes de portabilidade incluem:
-
-- MSYS2
-- MinGW-w64
-- LLVM/Clang
-
-A compatibilidade depende da implementação das dependências, do sistema de compilação e das APIs utilizadas pelo engine.
-
-Instruções oficiais para Windows serão disponibilizadas após a validação de uma compilação nativa.
-
----
-
-⚡ Primeiros passos
-
-Executar um exemplo
-
-Após clonar e compilar o NG, execute um dos exemplos disponíveis no repositório:
-
-bash ng.sh executar exemplos/hello.ng
-
-No Linux, quando o binário puder ser executado diretamente:
-
-./bin/ng executar exemplos/hello.ng
-
-Criar seu próprio programa
-
-Crie um arquivo com extensão ".ng":
-
-nano meu_programa.ng
-
-Escreva seu código usando a sintaxe da versão atual do NG.
-
-Execute:
-
-bash ng.sh executar meu_programa.ng
-
-Consulte a pasta "exemplos/" para programas funcionais e atualizados.
-
----
-
-⚙️ Engine de execução
-
-O NG possui diferentes componentes de execução.
-
-Interpretador
-
-O interpretador C executa programas por meio da estrutura AST e do runtime da linguagem.
-
-É a alternativa de execução mais compatível com ambientes que apresentam restrições para código nativo gerado dinamicamente.
-
-JIT — Just-In-Time Compiler
-
-O NG possui um compilador JIT experimental que busca converter partes compatíveis da execução em código nativo.
-
-O JIT depende das permissões de memória e das capacidades do sistema operacional.
-
-Em Android, Termux, proot e chroot, a execução de código nativo gerado dinamicamente pode estar sujeita a limitações.
-
-O projeto está trabalhando na melhoria da alocação de memória executável, compatibilidade e fallback automático.
-
-Transpiler Lua
-
-O NG também possui recursos de transpilação para Lua, permitindo converter construções suportadas da linguagem para código Lua.
-
-A compatibilidade depende dos recursos implementados no transpiler.
-
----
-
-🔧 Compilação a partir do código-fonte
-
-Limpar artefatos:
-
-make clean
-
-Compilar:
-
-make
-
-Executar testes:
-
+# Executar bateria de testes completa
 make test
+```
 
-Executar a suíte completa:
+### REPL interativo
 
-make test-all
+Executar `ng` sem argumentos inicia o REPL nativo (equivalente ao `lua` do
+Lua). Em mounts `/storage` com `noexec`, use o wrapper do projeto:
 
-Executar benchmark:
+```bash
+bash ng.sh          # inicia o REPL NG
+bash ng.sh executar testes/01_ola_mundo.ng
+```
 
-make bench
+Ou copie o binário para um diretório executável:
 
-Consultar os targets disponíveis:
+```bash
+cp bin/ng "$PREFIX/tmp/ng" && chmod +x "$PREFIX/tmp/ng"
+"$PREFIX/tmp/ng"
+```
 
-make
 
----
 
-📊 Benchmarks
+- O escopo global é persistente: variáveis e funções definidas continuam
+  disponíveis nas linhas seguintes.
+- Blocos multilinhas são lidos automaticamente enquanto houver `[` ou `(`
+  abertos, usando o prompt secundário `>> `.
+- `sair`, `exit` ou `Ctrl+D` encerram a sessão.
+- Erros de léxico, sintaxe ou execução são exibidos sem encerrar o REPL.
 
-O NG possui benchmarks que avaliam diferentes operações:
+```text
+NG v0.3.0-alpha
+REPL interativo. Digite 'sair' ou Ctrl+D para encerrar.
+> Nome = "Miguel"
+> Funcao Saudacao(N) [
+>> Print N
+>> ]
+> Saudacao(Nome)
+Miguel
+> sair
+```
 
-- Loops
-- Operações aritméticas
-- Condicionais
-- Iteração de listas
-- Acesso indexado
-- Operações com strings
-- Loops aninhados
+### Independência — gerenciador de dependências
 
-Os resultados dependem de:
+```bash
+# Instalar por nome, URL Git ou URL comum
+ng independência install meu-pacote
+ng des i https://github.com/usuario/repositorio.git
+ng des i https://exemplo.com/pacote.ng
 
-- Processador
-- Sistema operacional
-- Compilador C
-- Flags de compilação
-- Backend de execução
-- Gerenciamento de memória
-- Condições do ambiente
+# Instalação global (PREFIX/lib/ng/modulos) com -g
+ng independência install meu-pacote -g
 
-Sempre informe o hardware, a versão do NG e o backend utilizado ao divulgar benchmarks.
+# Remover e listar
+ng independência desinstalar meu-pacote
+ng des des meu-pacote
+ng independência list
+ng des list
+```
 
----
+Todas as operações atualizam `Independência.txt.ng` no diretório atual, com
+nome, origem, URL, versão, escopo (local/global), status e caminho instalado.
+Pacotes globais passam a ser encontrados por `Importar @nome`.
 
-🗺️ Roadmap
+### Interoperabilidade NG ↔ Lua, Python e Go
 
-- [ ] Estabilização da sintaxe
-- [ ] Melhoria de mensagens de erro
-- [ ] Expansão da biblioteca padrão
-- [ ] Melhoria do compilador JIT
-- [ ] Gerenciamento seguro de memória executável
-- [ ] Fallback adaptativo entre JIT e interpretador
-- [ ] Melhor compatibilidade Android
-- [ ] Melhor compatibilidade Linux
-- [ ] Portabilidade para Windows
-- [ ] Portabilidade para macOS
-- [ ] Gerenciador de pacotes
-- [ ] Documentação completa
-- [ ] Mais benchmarks
-- [ ] Builds automatizados
-- [ ] CI/CD
+O módulo nativo `@interop` executa código nas três linguagens e troca valores
+usando JSON (`NG_INPUT` → processo → JSON de volta para a NG):
 
----
+```text
+Importar @interop
 
-📚 Documentação
+Print Interop.Python("print('ola do python')")
+Print Interop.Lua("print('ola da lua')")
 
-A documentação está sendo organizada para cobrir:
+Dobro = Interop.Trocar("python", "import json,os\nv=json.loads(os.environ['NG_INPUT'])\nprint(json.dumps({'valor': v*2}))", 21)
+Print Dobro.valor
+```
 
-Documento| Conteúdo
-"docs/INSTALL.md"| Instalação e compilação
-"docs/GETTING_STARTED.md"| Primeiros passos
-"docs/LANGUAGE.md"| Fundamentos da linguagem
-"docs/SYNTAX.md"| Referência da sintaxe
-"docs/BUILTINS.md"| Funções nativas
-"docs/MODULES.md"| Módulos e bibliotecas
-"docs/JIT.md"| Compilador JIT
-"docs/ARCHITECTURE.md"| Arquitetura do engine
-"docs/PLATFORM_SUPPORT.md"| Compatibilidade de plataformas
-"docs/FAQ.md"| Perguntas frequentes
+Também existem `Interop.Executar(lang, code)`, `Interop.ParaJSON(valor)`,
+`Interop.ParaNG(json)` e o módulo legado `MyLanguage.Go(code)`.
 
----
+### Loop, listas e Print inteligente
 
-🤝 Contribuindo
+```text
+Nomes = ["Carlos", "Renato", "Ângela", "Maria"]
 
-Contribuições são bem-vindas!
+Loop Nome in Nomes [
+    Print Nome
+]
 
-Você pode contribuir com:
+Print Nomes        # imprime um elemento por linha
+Vazia = []         # lista vazia (Loop nao executa o bloco)
+```
 
-- Relatos de bugs
-- Correções
-- Documentação
-- Exemplos
-- Testes
-- Melhorias de desempenho
-- Bibliotecas
-- Compatibilidade com outras plataformas
-- Novos recursos da linguagem
+- `Loop <variavel> in <lista> [ ... ]` percorre automaticamente todos os
+  elementos; a variável existe apenas durante o loop e seu valor anterior é
+  restaurado ao final (escopo correto, inclusive em loops aninhados).
+- Listas aceitam strings, números, UTF-8 e podem ser vazias.
+- `Print` de uma lista mostra cada elemento em uma linha; `Print` de uma tabela
+  comum mostra `chave = valor` linha a linha.
 
-Antes de contribuir, consulte as orientações do projeto, quando disponíveis.
+Testes: `bash testes/test_loop.sh bin/ng` (ou `make test-loop`).
 
----
+### Banco de dados SQLite real (`@sqlite`)
 
-🐛 Reportando bugs
+Usa a biblioteca `sqlite3` de verdade (NÃO é simulação). Suporta `.db`,
+`.sqlite`, `.sqlite3` e `:memory:`.
 
-Ao reportar um problema, inclua:
+```text
+Importar @sqlite
+Importar @json
 
-- Versão ou commit do NG
-- Sistema operacional
-- Arquitetura
-- Versão do compilador
-- Comando utilizado
-- Mensagem de erro
-- Exemplo mínimo que reproduza o problema
+Banco = SQLite("usuarios.db")
+Banco.CriarTabela("CREATE TABLE usuarios (id INTEGER PRIMARY KEY, nome TEXT, idade INTEGER)")
+Banco.Inserir("usuarios", JSON.Parse("{\"nome\":\"Ana\",\"idade\":30}"))
 
-Isso facilita a investigação e a correção.
+Usuarios = Banco.Consultar("SELECT * FROM usuarios WHERE idade > ?", [18])
+Print Usuarios
+Loop U in Usuarios [ Print U.nome ]
+```
 
----
+Operações: `Executar`, `Consultar`, `Inserir`, `Atualizar`, `Excluir`,
+`ListarTabelas`, `Estrutura`, `Colunas`, `CriarIndice`, `Iniciar`, `Confirmar`,
+`Desfazer`, `Fechar`, `UltimoErro`, `Versao`, `Ajuda`.
 
-🔐 Segurança
+Sistema de parâmetros (comandos de biblioteca):
 
-Se você encontrar uma vulnerabilidade de segurança, evite publicar detalhes que possam colocar usuários em risco antes que ela seja investigada e corrigida.
+```text
+Print Banco.Params("listar")
+Print Banco.Params("criar tabela", "CREATE TABLE notas (id INTEGER PRIMARY KEY)")
+Print Banco.Params("inserir usuario", "usuarios", JSON.Parse("{\"id\":1}"))
+Print Banco.Params("consultar usuarios", "SELECT nome FROM usuarios", [])
+Print list("listar")
+```
 
-Utilize os canais de contato ou o procedimento de segurança do repositório, quando disponível.
+`list(...)` usa a última conexão aberta. Parâmetros desconhecidos retornam
+ajuda em vez de falhar silenciosamente. Consultas usam `sqlite3_prepare_v2`
+com parâmetros ligados (proteção contra SQL injection). `Excluir` sem `WHERE`
+exige confirmação explícita.
 
----
+SQL suportado é o próprio SQLite: JOIN, LEFT JOIN, GROUP BY, HAVING, ORDER BY,
+LIMIT/OFFSET, subconsultas, COUNT/SUM/AVG/MIN/MAX, DISTINCT, LIKE/IN/BETWEEN,
+chaves primárias/estrangeiras, índices e transações.
 
-📄 Licença
+Testes: `bash testes/test_sqlite.sh bin/ng` (ou `make test-sqlite`).
 
-Consulte o arquivo "LICENSE" deste repositório para verificar os termos de distribuição e uso do NG.
+**MySQL:** não implementado. Não há `libmysqlclient` neste ambiente; a
+arquitetura já separa drivers por módulo (`@sqlite` ≠ `@mysql`) e o catálogo
+`Info.Modulos()` marca `@mysql` como `planejado`.
 
----
+### JSON completo (`@json`)
 
-⭐ Projeto
+`Ler`, `Gravar`, `Validar`, `Parse`, `Stringify`, `Obter`, `Definir`, `Remover`,
+`Chaves`, `Tipo`, `Formatar`, `Tamanho`, `Copiar`. Resultados são coleções NG
+compatíveis com `Loop` e `Print`.
 
-NG Language Engine é um projeto independente em desenvolvimento.
+Testes: `bash testes/test_json.sh bin/ng` (ou `make test-json`).
 
-Se você gostou da ideia, acompanhe o desenvolvimento, teste a linguagem, reporte bugs ou contribua com código e documentação.
+### Print avançado, Info e diagnósticos
 
-🔗 Repositório oficial:
+`@format` expõe `Format.Formatar(valor, modo)`, `Format.Imprimir` e
+`Format.Modos()`. Existem **64 modos reais**, entre eles: `texto`, `tipo`,
+`tamanho`, `numero`, `hex`, `binario`, `json`, `json-indentado`, `csv`,
+`markdown`, `xml`, `tabela`, `tabela-compacta`, `tabela-detalhada`,
+`tabela-linhas`, `sem-bordas`, `indentado`, `separador`, `prefixo`, `sufixo`,
+`titulo`, `cabecalho`, `rodape`, alinhamentos, `largura20`, `quebra`,
+`enumerado`, `marcadores`, `progresso`, `status`, `aviso`, `erro`, `sucesso`,
+`info`, `debug`, `destaque`, `cores`, `sem-cores`, `resumo`, `estrutura`,
+`metadados`, `limite`, `truncado`, `estatisticas`, `tempo` e modos de info.
 
-https://github.com/Migu3873378373737/NG
+`@info` fornece `Versao()`, `Linguagem()`, `Runtime()`, `Compilador()`,
+`Arquitetura()`, `Sistema()`, `Diretorio()`, `Memoria()`, `Configuracao()`,
+`Recursos()`, `Modulos()` e `Tudo()` — todos com dados detectados em runtime.
+
+`@diag` fornece `Condicao()`, `Colecao()`, `Variavel()` e `SQL()`. Com
+`NG_DIAG=1`, condições falsas, listas vazias e divisão por zero também emitem
+dica automaticamente, sem alterar a lógica do programa.
+
+Testes: `bash testes/test_print.sh bin/ng` (ou `make test-print`).
+Suíte completa: `make test-all`.
+
+## 4. Cross-compilação ARM (32 e 64 bits)
+
+```bash
+# Requer o pacote Termux ndk-multilib (bionic libc armv7a + aarch64)
+apt install ndk-multilib
+
+make -f Makefile.cross
+# gera:
+#   bin/ng_arm64  -> ELF 64-bit ARM aarch64 (Android)
+#   bin/ng_armhf  -> ELF 32-bit ARM EABI5/hard-float (Android)
+```
+
+O alvo `arm64` foi executado com sucesso neste ambiente. O binário `armhf`
+foi gerado e validado com `file`; não executa neste dispositivo porque o
+runtime Android instalado é somente 64-bit (`error: 32-bit instead of 64-bit`).
+
+Nas compilações cruzadas o cliente HTTP libcurl é substituído pelo comando
+`curl` externo (`-DNG_NO_CURL`) e o `@sqlite` é marcado como indisponível
+(`-DNG_NO_SQLITE`), pois o NDK não fornece libcurl/libsqlite3 para ARM. O build
+nativo no Termux (`make`) usa SQLite real e libcurl.
+
+## 5. Otimização radical da estrutura original
+
+Nenhuma funcionalidade foi removida. As mudanças foram:
+
+- Build: `-Os -flto`, seções separadas, `--gc-sections`, strip e remoção de
+  tabelas de unwind. `CC=clang` é usado explicitamente (o wrapper `cc` deste
+  ambiente gerava um binário com comportamento diferente com LTO).
+- Lexer: literais numéricos não alocam mais texto (`strtod` direto do source).
+- Parser: texto dos tokens é transferido para a AST sem `strdup` e liberado
+  após o parse (`ng_parser_cleanup()`), eliminando um vazamento por token.
+- Runtime: `ng_env_new()` deixou de alocar um `NGTable` separado só para copiá-lo.
+- CLI: registro de módulos nativos é feito apenas quando há execução/REPL,
+  acelerando `versao`, `ajuda` e `limpar-cache`.
+- Avisos de redefinição de `_GNU_SOURCE` eliminados.
+
+Benchmarks reais neste ambiente (valores variam com carga/thermal):
+
+```text
+Tamanho do executável: 194.288 B -> 132.808 B  (-31,6%)
+Benchmark 3 execuções (2M iterações): 2,066 s -> 1,792 s  (~-13%)
+RSS reportado: ~5.000 KiB -> ~4.780 KiB
+```
+
+Comandos:
+
+```bash
+make          # build nativo otimizado
+make bench    # benchmark longo (2M iterações)
+make test-all # suíte completa
+```
+
+Para comparar com o build antigo:
+
+```bash
+make OPT_LEVEL=-O2 LTO= bench
+```

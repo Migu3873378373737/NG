@@ -1,0 +1,8 @@
+# Lista vazia: o bloco nao deve executar
+Vazia = []
+
+Loop Item in Vazia [
+    Print "NAO DEVE APARECER"
+]
+
+Print "lista vazia ok"

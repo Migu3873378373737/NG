@@ -1,0 +1,6 @@
+# Modulo HTTP Nativo da NG Language (C11 Native Runtime)
+# Fornece suporte nativo a HTTP/HTTPS com sockets e TLS sem dependencias externas pesadas.
+
+Função Info() [
+    Print "NG @http v1.0.0 — Modulo Nativo C11 (Sockets, Express-like Server, HTTP/HTTPS Client)"
+]

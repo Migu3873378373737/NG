@@ -1,0 +1,29 @@
+# Regressoes das correcoes do runtime
+Print -5
+Print 3 - -2
+
+Texto = "abc"
+Print Texto[1]
+
+Lista = [10, 20, 30]
+Se Lista[0] == 10 [ Print "indice-em-condicao-ok" ]
+
+Importar @json
+Vazio = JSON.Parse("{}")
+Se Vazio [ Print "tabela-vazia-verdadeira" ] Senao [ Print "tabela-vazia-falsa" ]
+
+Contador = 0
+Funcao Inc() [
+    Contador = Contador + 1
+]
+Inc()
+Inc()
+Print Contador
+
+A = JSON.Parse("{\"x\":1,\"n\":{\"y\":2}}")
+B = A
+B.x = 9
+A.n.y = 7
+Print A.x
+Print A.n.y
+Print A[ "n" ][ "y" ]

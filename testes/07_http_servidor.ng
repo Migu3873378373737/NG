@@ -1,0 +1,21 @@
+# Teste de Criacao e Rotas do Servidor HTTP Nativo da NG
+
+Importar @http
+
+Servidor = HTTP()
+
+Servidor.Get("/", Função(req, res) [
+    res.HTML("<h1>NG funcionando!</h1>")
+])
+
+Servidor.Get("/api", Função(req, res) [
+    res.JSON("{\"status\":\"ok\"}")
+])
+
+Servidor.Post("/usuarios", Função(req, res) [
+    Dados = req.JSON()
+    res.Status(201).JSON(Dados)
+])
+
+Print "Servidor HTTP configurado com sucesso!"
+Print "Rotas registradas: GET /, GET /api, POST /usuarios"

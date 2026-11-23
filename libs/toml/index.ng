@@ -1,0 +1,6 @@
+# Biblioteca Padrao: toml
+Importar @toml
+
+Função Parse(texto) [
+    Y = TOML.Parse(texto)
+]

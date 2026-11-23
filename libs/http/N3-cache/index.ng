@@ -1,0 +1,14 @@
+# Modulo N3-cache Nativo NG
+Importar @N3-cache
+
+Função Valido(arquivo) [
+    Y = N3Cache.Valido(arquivo)
+]
+
+Função Hash(conteudo) [
+    Y = N3Cache.Hash(conteudo)
+]
+
+Função Limpar() [
+    Y = N3Cache.Limpar()
+]

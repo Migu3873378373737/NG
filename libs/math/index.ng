@@ -1,0 +1,14 @@
+# Biblioteca Padrao: math
+Importar @math
+
+Função Abs(n) [
+    Y = Math.Abs(n)
+]
+
+Função Raiz(n) [
+    Y = Math.Sqrt(n)
+]
+
+Função Potencia(b, e) [
+    Y = Math.Pow(b, e)
+]

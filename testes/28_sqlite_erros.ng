@@ -1,0 +1,14 @@
+# Casos de erro do modulo SQLite (usados por test_sqlite.sh)
+Importar @sqlite
+
+Print "antes do erro"
+
+Banco = SQLite(":memory:")
+Banco.Executar("SELECT * FROM tabela_que_nao_existe")
+
+Print "depois do erro SQL"
+
+Banco.Excluir("usuarios", "")
+
+Print "depois do erro de exclusao insegura"
+Banco.Fechar()
