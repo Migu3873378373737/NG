@@ -1,0 +1,4 @@
+.n3cache/
+bin/ng
+ng.zip
+*.patch
