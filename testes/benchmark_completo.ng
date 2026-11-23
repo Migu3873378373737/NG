@@ -1,13 +1,14 @@
+
 # =========================================================
-# NG BENCHMARK COMPLETO
-# Versao: 1.0
-# Objetivo: medir desempenho do interpretador NG
+# NG BENCHMARK JIT-FRIENDLY
+# Versao: 2.0
+# Objetivo: benchmark com aquecimento para JIT adaptativo
 # =========================================================
 
 Importar @time
 
 Print "======================================"
-Print "       NG BENCHMARK COMPLETO"
+Print "       NG BENCHMARK JIT"
 Print "======================================"
 
 # ---------------------------------------------------------
@@ -17,6 +18,13 @@ Print "======================================"
 Print ""
 Print "[1] LOOP E INCREMENTO"
 
+# Warmup
+Contador = 0
+Enquanto Contador < 20000 [
+    Contador = Contador + 1
+]
+
+# Benchmark real
 T0 = Time.Now()
 
 Contador = 0
@@ -39,6 +47,23 @@ Print T1 - T0
 Print ""
 Print "[2] OPERACOES ARITMETICAS"
 
+# Warmup
+A = 1
+B = 2
+Resultado = 0
+Contador = 0
+
+Enquanto Contador < 10000 [
+    Resultado = A + B
+    Resultado = Resultado * 2
+    Resultado = Resultado - A
+    Resultado = Resultado / B
+    A = A + 1
+    B = B + 1
+    Contador = Contador + 1
+]
+
+# Benchmark real
 T0 = Time.Now()
 
 A = 1
@@ -71,6 +96,22 @@ Print T1 - T0
 Print ""
 Print "[3] CONDICOES E DESVIOS"
 
+# Warmup
+Contador = 0
+Pares = 0
+Impares = 0
+
+Enquanto Contador < 10000 [
+    Se Contador % 2 == 0 [
+        Pares = Pares + 1
+    ] Senao [
+        Impares = Impares + 1
+    ]
+
+    Contador = Contador + 1
+]
+
+# Benchmark real
 T0 = Time.Now()
 
 Contador = 0
@@ -104,9 +145,20 @@ Print T1 - T0
 Print ""
 Print "[4] LISTAS E ITERACAO"
 
-T0 = Time.Now()
-
 Nomes = ["Ana", "Joao", "Jose", "Maria", "Angela"]
+
+# Warmup
+Contador = 0
+Enquanto Contador < 2000 [
+    Loop Nome in Nomes [
+        Texto = Nome
+    ]
+
+    Contador = Contador + 1
+]
+
+# Benchmark real
+T0 = Time.Now()
 
 Contador = 0
 Enquanto Contador < 200000 [
@@ -132,12 +184,21 @@ Print T1 - T0
 Print ""
 Print "[5] ACESSO POR INDICE"
 
-T0 = Time.Now()
-
 Nomes = ["Ana", "Joao", "Jose", "Maria", "Angela"]
 
+# Warmup
 Contador = 0
+Enquanto Contador < 10000 [
+    Texto = Nomes[0]
+    Texto = Nomes[1]
+    Texto = Nomes[2]
+    Contador = Contador + 1
+]
 
+# Benchmark real
+T0 = Time.Now()
+
+Contador = 0
 Enquanto Contador < 1000000 [
     Texto = Nomes[0]
     Texto = Nomes[1]
@@ -160,10 +221,17 @@ Print T1 - T0
 Print ""
 Print "[6] CONCATENACAO DE STRINGS"
 
+# Warmup
+Contador = 0
+Enquanto Contador < 10000 [
+    Texto = "NG" + "-Benchmark" + "-Teste"
+    Contador = Contador + 1
+]
+
+# Benchmark real
 T0 = Time.Now()
 
 Contador = 0
-
 Enquanto Contador < 200000 [
     Texto = "NG" + "-Benchmark" + "-Teste"
     Contador = Contador + 1
@@ -184,6 +252,22 @@ Print T1 - T0
 Print ""
 Print "[7] LOOP ANINHADO"
 
+# Warmup
+A = 0
+Total = 0
+
+Enquanto A < 50 [
+    B = 0
+
+    Enquanto B < 50 [
+        Total = Total + 1
+        B = B + 1
+    ]
+
+    A = A + 1
+]
+
+# Benchmark real
 T0 = Time.Now()
 
 A = 0
@@ -214,6 +298,7 @@ Print T1 - T0
 
 Print ""
 Print "======================================"
-Print "       BENCHMARK FINALIZADO"
+Print "       BENCHMARK JIT FINALIZADO"
 Print "======================================"
 Print "Todos os testes foram executados."
+

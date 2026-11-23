@@ -1,0 +1,12 @@
+# Independência.txt.ng
+# Registro nativo da NG. Gerado automaticamente.
+# Campos: nome, origem, url, versao, escopo, status, caminho
+
+---
+nome=http
+origem=nome
+url=local:libs/http/index.ng
+versao=0.0.0
+escopo=global
+status=instalado
+caminho=/data/data/com.termux/files/usr/lib/ng/modulos/http

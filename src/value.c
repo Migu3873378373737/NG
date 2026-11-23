@@ -1,35 +1,36 @@
 #include "ng_value.h"
 #include "ng_runtime.h"
+#include "ng_outbuf.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 void ng_val_print(const NGValue* val) {
     if (!val) {
-        printf("null\n");
+        ng_outbuf_printf("null\n");
         return;
     }
     switch (val->type) {
         case NG_VAL_NULL:
-            printf("null\n");
+            ng_outbuf_printf("null\n");
             break;
         case NG_VAL_BOOL:
-            printf("%s\n", val->as.boolean ? "true" : "false");
+            ng_outbuf_printf("%s\n", val->as.boolean ? "true" : "false");
             break;
         case NG_VAL_NUMBER:
             if (val->as.number == (long long)val->as.number) {
-                printf("%lld\n", (long long)val->as.number);
+                ng_outbuf_printf("%lld\n", (long long)val->as.number);
             } else {
-                printf("%g\n", val->as.number);
+                ng_outbuf_printf("%g\n", val->as.number);
             }
             break;
         case NG_VAL_STRING:
-            printf("%s\n", val->as.string ? val->as.string : "");
+            ng_outbuf_printf("%s\n", val->as.string ? val->as.string : "");
             break;
         case NG_VAL_TABLE: {
             NGTable* table = val->as.table;
             if (!table) {
-                printf("<tabela>\n");
+                ng_outbuf_printf("<tabela>\n");
                 break;
             }
 
@@ -50,31 +51,31 @@ void ng_val_print(const NGValue* val) {
                     if (ng_table_get(table, ng_index_key((long long)i, key, sizeof(key)), &item)) {
                         ng_val_print(&item);
                     } else {
-                        printf("null\n");
+                        ng_outbuf_printf("null\n");
                     }
                 }
                 break;
             }
 
-            printf("{\n");
+            ng_outbuf_printf("{\n");
             for (size_t i = 0; i < table->size; i++) {
                 NGEntry* entry = table->buckets[i];
                 while (entry) {
                     if (entry->key && entry->key[0] != '_') {
-                        printf("  %s = ", entry->key);
+                        ng_outbuf_printf("  %s = ", entry->key);
                         ng_val_print(&entry->value);
                     }
                     entry = entry->next;
                 }
             }
-            printf("}\n");
+            ng_outbuf_printf("}\n");
             break;
         }
         case NG_VAL_FUNCTION:
-            printf("<funcao %s>\n", val->as.func.name ? val->as.func.name : "anonima");
+            ng_outbuf_printf("<funcao %s>\n", val->as.func.name ? val->as.func.name : "anonima");
             break;
         case NG_VAL_NATIVE_FUNC:
-            printf("<funcao_nativa %s>\n", val->as.native_func.name ? val->as.native_func.name : "anonima");
+            ng_outbuf_printf("<funcao_nativa %s>\n", val->as.native_func.name ? val->as.native_func.name : "anonima");
             break;
     }
 }

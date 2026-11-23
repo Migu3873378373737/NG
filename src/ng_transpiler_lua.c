@@ -1,7 +1,6 @@
 #include "ng_transpiler_lua.h"
 #include <ctype.h>
 #include <stdbool.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -11,42 +10,23 @@ typedef struct {
     size_t cap;
 } StrBuf;
 
-static bool sb_init(StrBuf *sb, size_t initial_cap) {
-    sb->cap = initial_cap > 64 ? initial_cap : 64;
-    sb->data = (char *)malloc(sb->cap);
-    if (!sb->data) {
-        sb->len = 0;
-        sb->cap = 0;
-        return false;
-    }
+static bool sb_init(StrBuf *sb, size_t cap) {
+    sb->cap = cap > 64 ? cap : 64;
     sb->len = 0;
-    sb->data[0] = '\0';
-    return true;
-}
-
-static bool sb_reserve(StrBuf *sb, size_t extra) {
-    if (sb->len + extra + 1 <= sb->cap) {
-        return true;
-    }
-    size_t next_cap = sb->cap;
-    while (next_cap < sb->len + extra + 1) {
-        next_cap *= 2;
-    }
-    char *grown = (char *)realloc(sb->data, next_cap);
-    if (!grown) {
-        return false;
-    }
-    sb->data = grown;
-    sb->cap = next_cap;
-    return true;
+    sb->data = (char *)malloc(sb->cap);
+    if (sb->data) sb->data[0] = '\0';
+    return sb->data != NULL;
 }
 
 static bool sb_append_n(StrBuf *sb, const char *s, size_t n) {
-    if (!s || n == 0) {
-        return true;
-    }
-    if (!sb_reserve(sb, n)) {
-        return false;
+    if (!s || n == 0) return true;
+    if (sb->len + n + 1 > sb->cap) {
+        size_t next = sb->cap * 2;
+        while (next < sb->len + n + 1) next *= 2;
+        char *p = (char *)realloc(sb->data, next);
+        if (!p) return false;
+        sb->data = p;
+        sb->cap = next;
     }
     memcpy(sb->data + sb->len, s, n);
     sb->len += n;
@@ -63,582 +43,306 @@ static bool sb_append_char(StrBuf *sb, char c) {
 }
 
 static char *trim_whitespace(char *s) {
-    while (*s && isspace((unsigned char)*s)) {
-        s++;
-    }
+    while (*s && isspace((unsigned char)*s)) s++;
     size_t len = strlen(s);
-    while (len > 0 && isspace((unsigned char)s[len - 1])) {
+    while (len > 0 && isspace((unsigned char)s[len - 1])) s[--len] = '\0';
+    return s;
+}
+
+static char *strip_block_end(char *s) {
+    size_t len = strlen(s);
+    while (len > 0 && (isspace((unsigned char)s[len - 1]) || s[len - 1] == '[' || s[len - 1] == ']')) {
         s[--len] = '\0';
     }
     return s;
 }
 
-static bool starts_with_word(const char *s, const char *word) {
-    size_t wlen = strlen(word);
-    if (strncmp(s, word, wlen) != 0) {
-        return false;
+static const char *match_prefix(const char *s, const char *word) {
+    size_t len = strlen(word);
+    if (strncmp(s, word, len) != 0) return NULL;
+    char next = s[len];
+    if (next == '\0' || isspace((unsigned char)next) || next == '(' || next == '[') {
+        return s + len;
     }
-    char next = s[wlen];
-    return next == '\0' || isspace((unsigned char)next) || next == '(' || next == '[';
+    return NULL;
 }
 
-/* Funcao/Função com acento suportados */
-static bool starts_with_funcao(const char *s, const char **sig_out) {
-    if (starts_with_word(s, "Funcao")) {
-        *sig_out = s + strlen("Funcao");
-        return true;
-    }
-    if (starts_with_word(s, "Função")) {
-        *sig_out = s + strlen("Função");
-        return true;
-    }
-    return false;
-}
-
-/* Traduz expressoes simples de NG para Lua sem deixar '@' solto.
-   - listas NG ["a", "b"] -> Lua {"a", "b"}
-   - acesso por indice NG lista[0] mantem o formato Lua lista[0]
-   - identificadores com modulo (Time.Now) -> modulo.minha_funcao */
+/* Traduz expressoes simples de NG para Lua sem deixar '@' solto:
+   - listas literais ["a", "b"] -> Lua {"a", "b"}
+   - acesso por indice lista[0] permanece lista[0]
+   - Modulo.Funcao (Time.Now) -> time.agora */
 static bool translate_expr(const char *expr, StrBuf *out) {
-    bool in_single = false;
-    bool in_double = false;
+    char quote = 0;
     bool index_mode = false;
-    size_t i = 0;
     size_t n = strlen(expr);
 
-    while (i < n) {
+    for (size_t i = 0; i < n; ) {
         char c = expr[i];
 
-        if (c == '\'' && !in_double) {
-            bool escaped = (i > 0 && expr[i - 1] == '\\');
-            if (!escaped) {
-                in_single = !in_single;
-            }
+        if (quote) {
+            if (!sb_append_char(out, c)) return false;
+            if (c == quote && (i == 0 || expr[i - 1] != '\\')) quote = 0;
+            i++;
+            continue;
+        }
+        if (c == '\'' || c == '"') {
+            quote = c;
             if (!sb_append_char(out, c)) return false;
             i++;
             continue;
         }
 
-        if (c == '"' && !in_single) {
-            bool escaped = (i > 0 && expr[i - 1] == '\\');
-            if (!escaped) {
-                in_double = !in_double;
-            }
-            if (!sb_append_char(out, c)) return false;
+        if (c == '@') {
             i++;
             continue;
         }
 
-        if (!in_single && !in_double) {
-            /* Remove '@' residual em identificadores/modulos */
-            if (c == '@') {
+        if (c == '[') {
+            index_mode = (expr[i + 1] != '"' && expr[i + 1] != '\'');
+            if (!sb_append_char(out, index_mode ? '[' : '{')) return false;
+            i++;
+            continue;
+        }
+        if (c == ']') {
+            if (!sb_append_char(out, index_mode ? ']' : '}')) return false;
+            index_mode = false;
+            i++;
+            continue;
+        }
+
+        if (c == '!' && expr[i + 1] == '=') {
+            if (!sb_append(out, "~=")) return false;
+            i += 2;
+            continue;
+        }
+
+        if (c == '+') {
+            size_t k = i + 1;
+            while (k < n && isspace((unsigned char)expr[k])) k++;
+            const char *op = (k < n && (expr[k] == '"' || expr[k] == '\'')) ? ".." : "+";
+            if (!sb_append(out, op)) return false;
+            i++;
+            continue;
+        }
+
+        if (c == '&' && expr[i + 1] == '&') {
+            if (!sb_append(out, " and ")) return false;
+            i += 2;
+            continue;
+        }
+        if (c == '|' && expr[i + 1] == '|') {
+            if (!sb_append(out, " or ")) return false;
+            i += 2;
+            continue;
+        }
+
+        if (isalpha((unsigned char)c) || c == '_') {
+            size_t start = i;
+            while (i < n && (isalnum((unsigned char)expr[i]) || expr[i] == '_')) i++;
+            size_t wlen = i - start;
+
+            if (i < n && expr[i] == '.') {
+                char mod[32];
+                size_t ml = wlen < sizeof(mod) - 1 ? wlen : sizeof(mod) - 1;
+                for (size_t k = 0; k < ml; k++) {
+                    mod[k] = (char)tolower((unsigned char)expr[start + k]);
+                }
+                mod[ml] = '\0';
+                if (!sb_append(out, mod) || !sb_append_char(out, '.')) return false;
                 i++;
-                continue;
-            }
-            /* Listas [...] -> {...} (literais) ; acesso por indice mantem [...] */
-            if (c == '[') {
-                if (expr[i + 1] == '"' || expr[i + 1] == '\'') {
-                    if (!sb_append_char(out, '{')) return false;
-                    index_mode = false;
-                } else {
-                    if (!sb_append_char(out, '[')) return false;
-                    index_mode = true;
+
+                size_t fstart = i;
+                while (i < n && (isalnum((unsigned char)expr[i]) || expr[i] == '_')) i++;
+                size_t flen = i - fstart;
+                const char *fn = expr + fstart;
+                if (strcmp(mod, "time") == 0) {
+                    if (flen == 3 && memcmp(fn, "Now", 3) == 0) { fn = "agora"; flen = 5; }
+                    else if (flen == 5 && memcmp(fn, "Epoch", 5) == 0) { fn = "epoch"; flen = 5; }
+                    else if (flen == 6 && memcmp(fn, "Dormir", 6) == 0) { fn = "dormir"; flen = 6; }
                 }
-                i++;
+                if (!sb_append_n(out, fn, flen)) return false;
                 continue;
             }
-            if (c == ']') {
-                if (index_mode) {
-                    if (!sb_append_char(out, ']')) return false;
-                    index_mode = false;
-                } else {
-                    if (!sb_append_char(out, '}')) return false;
-                }
-                i++;
-                continue;
-            }
-            /* != -> ~= */
-            if (c == '!' && expr[i + 1] == '=') {
-                if (!sb_append(out, "~=")) return false;
-                i += 2;
-                continue;
-            }
-            /* NG: '+' entre strings vira Lua '..' (heuristic: frente eh string literal) */
-            if (c == '+' && !in_single && !in_double) {
-                size_t k = i + 1;
-                while (k < n && isspace((unsigned char)expr[k])) k++;
-                if (k < n && (expr[k] == '"' || expr[k] == '\'')) {
-                    if (!sb_append(out, "..")) return false;
-                } else {
-                    if (!sb_append_char(out, c)) return false;
-                }
-                i++;
-                continue;
-            }
-            /* && / || */
-            if (c == '&' && expr[i + 1] == '&') {
-                if (!sb_append(out, " and ")) return false;
-                i += 2;
-                continue;
-            }
-            if (c == '|' && expr[i + 1] == '|') {
-                if (!sb_append(out, " or ")) return false;
-                i += 2;
-                continue;
-            }
-            /* Palavras reservadas logicas em portugues */
-            if (isalpha((unsigned char)c) || c == '_') {
-                size_t start = i;
-                while (i < n && (isalnum((unsigned char)expr[i]) || expr[i] == '_')) {
-                    i++;
-                }
-                size_t wlen = i - start;
-                if (i < n && expr[i] == '.') {
-                    /* Identificador.modulo -> modulo.funcao (minusculacao do modulo) */
-                    char lower[64];
-                    size_t l = 0;
-                    for (size_t k = start; k < start + wlen && l < sizeof(lower) - 1; k++) {
-                        lower[l++] = (char)tolower((unsigned char)expr[k]);
-                    }
-                    lower[l] = '\0';
-                    if (!sb_append_n(out, lower, l)) return false;
-                    if (!sb_append_char(out, '.')) return false;
-                    i++;
-                    size_t s2 = i;
-                    while (i < n && (isalnum((unsigned char)expr[i]) || expr[i] == '_')) {
-                        i++;
-                    }
-                    size_t w2 = (size_t)(i - s2);
-                    if (w2 > 0) {
-                        if (strcmp(lower, "time") == 0) {
-                            if (w2 == 3 && strncmp(expr + s2, "Now", 3) == 0) {
-                                if (!sb_append(out, "agora")) return false;
-                            } else if (w2 == 5 && strncmp(expr + s2, "Epoch", 5) == 0) {
-                                if (!sb_append(out, "epoch")) return false;
-                            } else if (w2 == 6 && strncmp(expr + s2, "Dormir", 6) == 0) {
-                                if (!sb_append(out, "dormir")) return false;
-                            } else if (!sb_append_n(out, expr + s2, w2)) return false;
-                        } else {
-                            if (!sb_append_n(out, expr + s2, w2)) return false;
-                        }
-                    }
-                    continue;
-                }
-                if (wlen == 1 && strncmp(expr + start, "E", 1) == 0) {
-                    if (!sb_append(out, "and")) return false;
-                } else if (wlen == 2 && strncmp(expr + start, "OU", 2) == 0) {
-                    if (!sb_append(out, "or")) return false;
-                } else if (wlen == 3 && strncmp(expr + start, "Nao", 3) == 0) {
-                    if (!sb_append(out, "not ")) return false;
-                } else if (wlen == 9 && strncmp(expr + start, "Verdadeiro", 9) == 0) {
-                    if (!sb_append(out, "true")) return false;
-                } else if (wlen == 5 && strncmp(expr + start, "Falso", 5) == 0) {
-                    if (!sb_append(out, "false")) return false;
-                } else if (wlen == 4 && strncmp(expr + start, "Nulo", 4) == 0) {
-                    if (!sb_append(out, "nil")) return false;
-                } else {
-                    if (!sb_append_n(out, expr + start, wlen)) return false;
-                }
-                continue;
-            }
+
+            const char *src = expr + start;
+            if (wlen == 1 && *src == 'E') { if (!sb_append(out, "and")) return false; }
+            else if (wlen == 2 && memcmp(src, "OU", 2) == 0) { if (!sb_append(out, "or")) return false; }
+            else if (wlen == 3 && memcmp(src, "Nao", 3) == 0) { if (!sb_append(out, "not ")) return false; }
+            else if (wlen == 9 && memcmp(src, "Verdadeiro", 9) == 0) { if (!sb_append(out, "true")) return false; }
+            else if (wlen == 5 && memcmp(src, "Falso", 5) == 0) { if (!sb_append(out, "false")) return false; }
+            else if (wlen == 4 && memcmp(src, "Nulo", 4) == 0) { if (!sb_append(out, "nil")) return false; }
+            else { if (!sb_append_n(out, src, wlen)) return false; }
+            continue;
         }
 
         if (!sb_append_char(out, c)) return false;
         i++;
     }
-
     return true;
 }
 
-static bool emit_module_import(StrBuf *out, const char *raw_target) {
-    char mod_name[128];
+static bool emit_module_import(StrBuf *out, const char *raw) {
+    while (*raw && isspace((unsigned char)*raw)) raw++;
+    if (*raw == '@') raw++;
+    char mod[64];
     size_t j = 0;
+    while (*raw && !isspace((unsigned char)*raw) && j + 1 < sizeof(mod)) mod[j++] = *raw++;
+    mod[j] = '\0';
+    if (!j) return true;
 
-    while (*raw_target && isspace((unsigned char)*raw_target)) {
-        raw_target++;
-    }
-    if (*raw_target == '@') {
-        raw_target++;
-    }
-    while (*raw_target && !isspace((unsigned char)*raw_target) && j + 1 < sizeof(mod_name)) {
-        mod_name[j++] = *raw_target++;
-    }
-    mod_name[j] = '\0';
-
-    if (mod_name[0] == '\0') {
-        return true;
-    }
-
-    if (strcmp(mod_name, "time") == 0) {
-        return sb_append(
-            out,
+    if (strcmp(mod, "time") == 0) {
+        return sb_append(out,
             "local time = {\n"
             "  agora = function() return os.clock() end,\n"
             "  epoch = function() return os.time() end,\n"
             "  dormir = function(seg) local t0 = os.clock(); while os.clock() - t0 < (seg or 0) do end end\n"
-            "}\n"
-        );
+            "}\n");
     }
-
-    if (!sb_append(out, "local ") ||
-        !sb_append(out, mod_name) ||
-        !sb_append(out, " = rawget(_G, \"") ||
-        !sb_append(out, mod_name) ||
-        !sb_append(out, "\") or {}\n")) {
-        return false;
-    }
-    return true;
+    return sb_append(out, "local ") && sb_append(out, mod) &&
+           sb_append(out, " = rawget(_G, \"") && sb_append(out, mod) &&
+           sb_append(out, "\") or {}\n");
 }
 
-/* Pilha de blocos abertos para emitir 'end' nos fechamentos corretos */
-#define NG_LUA_TRANSPILER_STACK_MAX 64
-static char g_stack[NG_LUA_TRANSPILER_STACK_MAX][16];
-static int g_stack_depth = 0;
+typedef enum {
+    BLK_NONE = 0,
+    BLK_IF,
+    BLK_ELSE,
+    BLK_LOOP,
+    BLK_FUNC
+} BlockKind;
 
-static void ng_lua_transpiler_push(const char* kind) {
-    if (g_stack_depth < NG_LUA_TRANSPILER_STACK_MAX) {
-        snprintf(g_stack[g_stack_depth], 16, "%s", kind);
-        g_stack_depth++;
-    }
+#define STACK_MAX 64
+static BlockKind g_stack[STACK_MAX];
+static int g_depth = 0;
+
+static void stack_push(BlockKind k) {
+    if (g_depth < STACK_MAX) g_stack[g_depth++] = k;
 }
 
-static void ng_lua_transpiler_pop(void) {
-    if (g_stack_depth > 0) {
-        g_stack_depth--;
-    }
-}
-
-static const char* ng_lua_transpiler_top(void) {
-    return g_stack_depth > 0 ? g_stack[g_stack_depth - 1] : "";
-}
-
-/* Localiza '=' (sem '==') fora de strings; retorna pos e comprimento do resto. */
-static bool find_top_level_assign(const char* s, size_t* pos, size_t* len) {
-    bool in_single = false;
-    bool in_double = false;
+static bool find_top_level_assign(const char *s, size_t *pos) {
+    char quote = 0;
     for (size_t i = 0; s[i]; i++) {
-        if (s[i] == '\'' && !in_double) in_single = !in_single;
-        if (s[i] == '"' && !in_single) in_double = !in_double;
-        if (!in_single && !in_double && s[i] == '=' && s[i + 1] && s[i + 1] != '=') {
+        if (quote) {
+            if (s[i] == quote && (i == 0 || s[i - 1] != '\\')) quote = 0;
+        } else if (s[i] == '\'' || s[i] == '"') {
+            quote = s[i];
+        } else if (s[i] == '=' && s[i + 1] != '=' &&
+                   (i == 0 || (s[i - 1] != '=' && s[i - 1] != '!' && s[i - 1] != '<' && s[i - 1] != '>'))) {
             *pos = i;
-            *len = strlen(s) - i - 1;
             return true;
         }
     }
     return false;
 }
 
-static bool transpile_line(const char *raw_line, StrBuf *out) {
-    char *copy = (char *)malloc(strlen(raw_line) + 1);
-    if (!copy) {
-        return false;
-    }
-    strcpy(copy, raw_line);
-
-    char *trimmed = trim_whitespace(copy);
-    if (trimmed[0] == '\0') {
-        free(copy);
+static bool transpile_line(char *line, StrBuf *out) {
+    char *trimmed = trim_whitespace(line);
+    if (*trimmed == '\0') {
         return sb_append_char(out, '\n');
     }
 
-    /* Comentario de linha em NG (# ...) -> Lua (-- ...) */
-    if (trimmed[0] == '#') {
-        bool ok = sb_append(out, "--") &&
-                  sb_append(out, trimmed + 1) &&
-                  sb_append_char(out, '\n');
-        free(copy);
+    if (*trimmed == '#') {
+        return sb_append(out, "--") && sb_append(out, trimmed + 1) && sb_append_char(out, '\n');
+    }
+
+    const char *p;
+    if ((p = match_prefix(trimmed, "Importar"))) {
+        return emit_module_import(out, p);
+    }
+
+    if ((p = match_prefix(trimmed, "Enquanto"))) {
+        char *cond = strip_block_end(trim_whitespace((char *)p));
+        bool ok = sb_append(out, "while ") && translate_expr(cond, out) && sb_append(out, " do\n");
+        if (ok) stack_push(BLK_LOOP);
         return ok;
     }
 
-    /* Diretiva Importar @modulo */
-    if (starts_with_word(trimmed, "Importar")) {
-        const char *rest = trim_whitespace(trimmed + strlen("Importar"));
-        bool ok = emit_module_import(out, rest);
-        free(copy);
+    if ((p = match_prefix(trimmed, "Se"))) {
+        char *cond = strip_block_end(trim_whitespace((char *)p));
+        bool ok = sb_append(out, "if ") && translate_expr(cond, out) && sb_append(out, " then\n");
+        if (ok) stack_push(BLK_IF);
         return ok;
     }
 
-    /* Enquanto <cond> [ -> while <cond> do */
-    if (starts_with_word(trimmed, "Enquanto")) {
-        char* cond = trimmed + strlen("Enquanto");
-        size_t cl = strlen(cond);
-        while (cl > 0 && (cond[cl - 1] == ' ' || cond[cl - 1] == '\t' || cond[cl - 1] == '[' || cond[cl - 1] == ']')) {
-            cl--;
-        }
-        cond[cl] = '\0';
-        StrBuf expr;
-        if (!sb_init(&expr, 64)) {
-            free(copy);
-            return false;
-        }
-        bool ok = translate_expr(cond, &expr) &&
-                  sb_append(out, "while ") &&
-                  sb_append(out, expr.data) &&
-                  sb_append(out, " do\n");
-        free(expr.data);
-        free(copy);
-        if (ok) ng_lua_transpiler_push("while");
-        return ok;
-    }
-
-    /* Se <cond> [ -> if <cond> then */
-    if (starts_with_word(trimmed, "Se")) {
-        char* cond = trimmed + strlen("Se");
-        size_t cl = strlen(cond);
-        while (cl > 0 && (cond[cl - 1] == ' ' || cond[cl - 1] == '\t' || cond[cl - 1] == '[' || cond[cl - 1] == ']')) {
-            cl--;
-        }
-        cond[cl] = '\0';
-        StrBuf expr;
-        if (!sb_init(&expr, 64)) {
-            free(copy);
-            return false;
-        }
-        bool ok = translate_expr(cond, &expr) &&
-                  sb_append(out, "if ") &&
-                  sb_append(out, expr.data) &&
-                  sb_append(out, " then\n");
-        free(expr.data);
-        free(copy);
-        if (ok) ng_lua_transpiler_push("if");
-        return ok;
-    }
-
-    /* Loop <var> in <lista> [ -> for <var> in <lista> do */
-    if (starts_with_word(trimmed, "Loop")) {
-        const char* p = trimmed + strlen("Loop");
-        const char* in_pos = strstr(p, " in ");
-        if (!in_pos) {
-            free(copy);
-            return false;
-        }
-        const char* var = trim_whitespace((char*)p);
-        const char* lend = in_pos;
-        char var_buf[128];
-        size_t var_len = (size_t)(lend - var);
-        if (var_len > sizeof(var_buf) - 1) var_len = sizeof(var_buf) - 1;
-        memcpy(var_buf, var, var_len);
-        var_buf[var_len] = '\0';
-        const char* list = trim_whitespace((char*)in_pos + 4);
-        size_t ll = strlen(list);
-        while (ll > 0 && (list[ll - 1] == ' ' || list[ll - 1] == '\t' || list[ll - 1] == '[' || list[ll - 1] == ']')) {
-            ll--;
-        }
-        char list_buf[256];
-        if (ll > sizeof(list_buf) - 1) ll = sizeof(list_buf) - 1;
-        memcpy(list_buf, list, ll);
-        list_buf[ll] = '\0';
-        bool ok = sb_append(out, "for ") &&
-                  sb_append(out, var_buf) &&
-                  sb_append(out, " in ipairs(") &&
-                  sb_append(out, list_buf) &&
+    if ((p = match_prefix(trimmed, "Loop"))) {
+        const char *in_pos = strstr(p, " in ");
+        if (!in_pos) return false;
+        char var_buf[64];
+        size_t vlen = (size_t)(in_pos - p);
+        if (vlen >= sizeof(var_buf)) vlen = sizeof(var_buf) - 1;
+        memcpy(var_buf, p, vlen);
+        var_buf[vlen] = '\0';
+        char *var = trim_whitespace(var_buf);
+        char *list = strip_block_end(trim_whitespace((char *)in_pos + 4));
+        bool ok = sb_append(out, "for ") && sb_append(out, var) &&
+                  sb_append(out, " in ipairs(") && sb_append(out, list) &&
                   sb_append(out, ") do\n");
-        free(copy);
-        if (ok) ng_lua_transpiler_push("for");
-        return ok;
-    }
-    /* Funcao nome(params) [ -> function nome(params) */
-    const char* sig_ptr = NULL;
-    if (starts_with_funcao(trimmed, &sig_ptr)) {
-        const char* sig = sig_ptr;
-        const char* lp = strchr(sig, '(');
-        const char* rp = lp ? strchr(lp, ')') : NULL;
-        char fn_line[256];
-        if (lp && rp) {
-            const char* name = trim_whitespace((char*)sig);
-            size_t nl = (size_t)(lp - name);
-            char name_buf[128];
-            if (nl > sizeof(name_buf) - 1) nl = sizeof(name_buf) - 1;
-            memcpy(name_buf, name, nl);
-            name_buf[nl] = '\0';
-            const char* params = trim_whitespace((char*)lp + 1);
-            size_t pl = (size_t)(rp - params);
-            char params_buf[128];
-            if (pl > sizeof(params_buf) - 1) pl = sizeof(params_buf) - 1;
-            memcpy(params_buf, params, pl);
-            params_buf[pl] = '\0';
-            snprintf(fn_line, sizeof(fn_line), "function %s(%s)\n", name_buf, params_buf);
-        } else {
-            snprintf(fn_line, sizeof(fn_line), "function %s\n", trim_whitespace((char*)sig));
-        }
-        bool ok = sb_append(out, fn_line);
-        free(copy);
-        if (ok) ng_lua_transpiler_push("func");
+        if (ok) stack_push(BLK_LOOP);
         return ok;
     }
 
-    /* Retornar <expr> */
-    if (starts_with_word(trimmed, "Retornar")) {
-        const char *val = trim_whitespace((char*)trimmed + strlen("Retornar"));
-        StrBuf expr;
-        if (!sb_init(&expr, 64)) {
-            free(copy);
-            return false;
-        }
-        bool ok = sb_append(out, "return");
-        if (val[0] != '\0') {
-            ok = ok && sb_append_char(out, ' ') && translate_expr(val, &expr) && sb_append(out, expr.data);
-        }
-        ok = ok && sb_append_char(out, '\n');
-        free(expr.data);
-        free(copy);
+    if ((p = match_prefix(trimmed, "Funcao")) || (p = match_prefix(trimmed, "Função"))) {
+        strip_block_end((char *)p);
+        p = trim_whitespace((char *)p);
+        bool ok = sb_append(out, "function ") && sb_append(out, p) && sb_append_char(out, '\n');
+        if (ok) stack_push(BLK_FUNC);
         return ok;
     }
 
-    /* Print <expr> */
-    if (starts_with_word(trimmed, "Print")) {
-        const char *arg = trim_whitespace((char*)trimmed + strlen("Print"));
-        StrBuf expr;
-        if (!sb_init(&expr, 64)) {
-            free(copy);
-            return false;
-        }
-        bool ok = translate_expr(arg, &expr) &&
-                  sb_append(out, "print(") &&
-                  sb_append(out, expr.data) &&
-                  sb_append(out, ")\n");
-        free(expr.data);
-        free(copy);
-        return ok;
+    if ((p = match_prefix(trimmed, "Retornar"))) {
+        char *val = trim_whitespace((char *)p);
+        if (*val == '\0') return sb_append(out, "return\n");
+        return sb_append(out, "return ") && translate_expr(val, out) && sb_append_char(out, '\n');
     }
 
-    /* Comando G <variavel> -> print(<variavel>) */
+    if ((p = match_prefix(trimmed, "Print"))) {
+        char *arg = trim_whitespace((char *)p);
+        return sb_append(out, "print(") && translate_expr(arg, out) && sb_append(out, ")\n");
+    }
+
     if (trimmed[0] == 'G' && (trimmed[1] == ' ' || trimmed[1] == '\0')) {
-        StrBuf expr;
-        if (!sb_init(&expr, 64)) {
-            free(copy);
-            return false;
-        }
-        bool ok = translate_expr(trimmed + 1, &expr) && sb_append(out, "print(") && sb_append(out, expr.data) && sb_append(out, ")\n");
-        free(expr.data);
-        free(copy);
-        return ok;
+        char *arg = trim_whitespace(trimmed + 1);
+        return sb_append(out, "print(") && translate_expr(arg, out) && sb_append(out, ")\n");
     }
 
-    /* Senao / SenaoSe <cond> */
-    if (starts_with_word(trimmed, "Senao")) {
-        if (!sb_append(out, "else\n")) {
-            free(copy);
-            return false;
-        }
-        if (g_stack_depth > 0) {
-            snprintf(g_stack[g_stack_depth - 1], 16, "else");
-        }
-        free(copy);
-        return true;
+    if (match_prefix(trimmed, "Senao")) {
+        if (g_depth > 0) g_stack[g_depth - 1] = BLK_ELSE;
+        return sb_append(out, "else\n");
     }
 
-    /* Fim de bloco */
-    if (starts_with_word(trimmed, "Fim")) {
-        if (!sb_append(out, "end\n")) {
-            free(copy);
-            return false;
-        }
-        if (g_stack_depth > 0) {
-            const char* top = ng_lua_transpiler_top();
-            if (strcmp(top, "func") == 0) {
-                ng_lua_transpiler_pop();
-            }
-        }
-        free(copy);
-        return true;
+    if (match_prefix(trimmed, "Fim")) {
+        if (g_depth > 0 && g_stack[g_depth - 1] == BLK_FUNC) g_depth--;
+        return sb_append(out, "end\n");
     }
 
-    /* Fechamento de bloco: "]" ou "] Senao [" */
     if (trimmed[0] == ']') {
-        bool has_else = strstr(trimmed, "Senao") != NULL;
-        const char* top = ng_lua_transpiler_top();
-        if (strcmp(top, "else") == 0) {
-            if (!sb_append(out, "end\n")) {
-                free(copy);
-                return false;
-            }
-            ng_lua_transpiler_pop();
-        } else if (strcmp(top, "if") == 0) {
-            if (has_else) {
-                /* fecha o bloco then e abre o bloco else */
-                if (!sb_append(out, "else\n")) {
-                    free(copy);
-                    return false;
-                }
-                snprintf(g_stack[g_stack_depth - 1], 16, "else");
-            } else {
-                if (!sb_append(out, "end\n")) {
-                    free(copy);
-                    return false;
-                }
-                ng_lua_transpiler_pop();
-            }
-        } else if (strcmp(top, "while") == 0 || strcmp(top, "for") == 0 || strcmp(top, "func") == 0) {
-            if (!sb_append(out, "end\n")) {
-                free(copy);
-                return false;
-            }
-            ng_lua_transpiler_pop();
-        } else {
-            if (!sb_append(out, "end\n")) {
-                free(copy);
-                return false;
-            }
+        if (g_depth > 0 && g_stack[g_depth - 1] == BLK_IF && strstr(trimmed, "Senao")) {
+            g_stack[g_depth - 1] = BLK_ELSE;
+            return sb_append(out, "else\n");
         }
-        free(copy);
-        return true;
+        if (g_depth > 0) g_depth--;
+        return sb_append(out, "end\n");
     }
 
-    /* Atribuicao: <var> = <expr> */
-    {
-        size_t eq_pos = 0;
-        size_t eq_len = 0;
-        if (find_top_level_assign(trimmed, &eq_pos, &eq_len)) {
-            char lhs[128];
-            size_t ll = eq_pos;
-            if (ll > sizeof(lhs) - 1) ll = sizeof(lhs) - 1;
-            memcpy(lhs, trimmed, ll);
-            lhs[ll] = '\0';
-            char* lhs_trim = trim_whitespace(lhs);
-            const char* rhs = trimmed + eq_pos + 1;
-            StrBuf expr;
-            if (!sb_init(&expr, 64)) {
-                free(copy);
-                return false;
-            }
-            bool ok = translate_expr(rhs, &expr);
-            char line_buf[1024];
-            if (ok) {
-                snprintf(line_buf, sizeof(line_buf), "%s = %s\n", lhs_trim, expr.data);
-                ok = sb_append(out, line_buf);
-            }
-            free(expr.data);
-            free(copy);
-            return ok;
-        }
+    size_t eq_pos = 0;
+    if (find_top_level_assign(trimmed, &eq_pos)) {
+        trimmed[eq_pos] = '\0';
+        char *lhs = trim_whitespace(trimmed);
+        char *rhs = trim_whitespace(trimmed + eq_pos + 1);
+        return sb_append(out, lhs) && sb_append(out, " = ") &&
+               translate_expr(rhs, out) && sb_append_char(out, '\n');
     }
 
-    /* Linha geral / chamada */
-    {
-        StrBuf expr;
-        if (!sb_init(&expr, 128)) {
-            free(copy);
-            return false;
-        }
-        bool ok = translate_expr(trimmed, &expr) && sb_append(out, expr.data) && sb_append_char(out, '\n');
-        free(expr.data);
-        free(copy);
-        return ok;
-    }
+    return translate_expr(trimmed, out) && sb_append_char(out, '\n');
 }
 
 char *ng_transpile_to_lua(const char *ng_source, size_t *out_len) {
-    if (!ng_source) {
-        return NULL;
-    }
+    if (!ng_source) return NULL;
 
     StrBuf out;
-    if (!sb_init(&out, strlen(ng_source) + 256)) {
-        return NULL;
-    }
+    if (!sb_init(&out, strlen(ng_source) + 256)) return NULL;
 
-    g_stack_depth = 0;
+    g_depth = 0;
 
     if (!sb_append(&out, "-- Gerado em tempo real de NG para Lua\n")) {
         free(out.data);
@@ -648,15 +352,15 @@ char *ng_transpile_to_lua(const char *ng_source, size_t *out_len) {
     const char *p = ng_source;
     while (*p) {
         const char *nl = strchr(p, '\n');
-        size_t line_len = nl ? (size_t)(nl - p) : strlen(p);
+        size_t len = nl ? (size_t)(nl - p) : strlen(p);
 
-        char *line = (char *)malloc(line_len + 1);
+        char *line = (char *)malloc(len + 1);
         if (!line) {
             free(out.data);
             return NULL;
         }
-        memcpy(line, p, line_len);
-        line[line_len] = '\0';
+        memcpy(line, p, len);
+        line[len] = '\0';
 
         if (!transpile_line(line, &out)) {
             free(line);
@@ -665,14 +369,10 @@ char *ng_transpile_to_lua(const char *ng_source, size_t *out_len) {
         }
         free(line);
 
-        if (!nl) {
-            break;
-        }
+        if (!nl) break;
         p = nl + 1;
     }
 
-    if (out_len) {
-        *out_len = out.len;
-    }
+    if (out_len) *out_len = out.len;
     return out.data;
 }

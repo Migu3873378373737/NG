@@ -11,6 +11,10 @@ if [ ! -f "$PROJ/bin/ng" ]; then
     exit 1
 fi
 
+# Desabilita o compilador JIT para evitar erros de memória/mmap RWX
+# que fazem o Termux matar o processo (OOM).
+export NG_JIT_DISABLE=1
+
 cp "$PROJ/bin/ng" "$RUN"
 chmod +x "$RUN"
 

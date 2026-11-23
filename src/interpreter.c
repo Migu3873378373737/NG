@@ -1,5 +1,6 @@
 #include <math.h>
 #include "ng_interpreter.h"
+#include "ng_jit.h"
 #include "ng_error.h"
 #include "ng_lexer.h"
 #include "ng_module.h"
@@ -537,5 +538,7 @@ static NGValue eval_expression(NGInterpreter* interp, NGAstNode* node) {
 
 bool ng_interp_run(NGInterpreter* interp, NGAstNode* program) {
     if (!program) return false;
+    /* Dynamic V "Core 0b": tenta executar via JIT nativo primeiro. */
+    if (ng_jit_run_program(program, interp)) return true;
     return execute_statement(interp, program);
 }

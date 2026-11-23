@@ -7,45 +7,22 @@
 #include "ng_repl.h"
 #include "ng_dependency.h"
 #include "ng_net_libs.h"
+#include "ng_dynamicv.h"
+#include "ng_outbuf.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 /* ============================================================
- * Dynamic V (Invicta) - arquitetura de execucao em duas fases:
- *
- *   FASE PREPARACAO (N3 Cache - caminho MISS/HIT):
- *     - HIT:   V-unit cacheado encontrado -> deserializa e retorna o
- *             programa. Direto ao executor, sem lexer/parser (rota rapida).
- *     - MISS:  lexer + parser -> serializa V-unit -> persiste no cache.
- *
- *   FASE EXECUCAO:
- *     Interpretador sobre o V-unit (AST deserializada/compilada).
+ * Dynamic V Dual-Core (Invicta):
+ *   - Core 0 (C11): executor / runtime nativo e fallback.
+ *   - Core 1 (Lua embedded): worker de otimização semântica e IR.
+ *   - L2 Barramento: fila de tarefas e sincronização C11.
+ *   - N3 Cache: cache persistente de V-units em disco com escrita atômica.
  * ========================================================= */
 static NGAstNode* v_prepare_program(const char* filepath, const char* source,
                                    bool store_compiled, bool* out_error) {
-    *out_error = false;
-    NGAstNode* program = n3_cache_load_ast(filepath, source);
-    if (program) {
-        /* ROTA DIRETA VIA HIT: sem trabalho pesado de lex/parse. */
-        return program;
-    }
-
-    NGLexer lexer;
-    ng_lexer_init(&lexer, source, filepath);
-    NGParser parser;
-    ng_parser_init(&parser, &lexer, filepath);
-    program = ng_parser_parse_program(&parser);
-    ng_parser_cleanup(&parser);
-    if (parser.has_error) {
-        ng_ast_free(program);
-        *out_error = true;
-        return NULL;
-    }
-    if (store_compiled) {
-        n3_cache_store_ast(filepath, source, program);
-    }
-    return program;
+    return ng_dynamicv_prepare_program(filepath, source, store_compiled, out_error);
 }
 
 static char* read_file(const char* path) {
@@ -82,6 +59,10 @@ static void print_help(void) {
     printf("  compilar <arquivo.ng>   Valida sintaxe e prepara cache N3\n");
     printf("  verificar <arquivo.ng>  Verifica sintaxe e integridade\n");
     printf("  limpar-cache            Limpa o cache N3 do projeto\n");
+    printf("  dynamicv status         Status do Dynamic V Dual-Core (Core 0/1, L2, estatísticas)\n");
+    printf("  dynamicv cache          Inspeção do cache N3\n");
+    printf("  dynamicv limpar         Limpa o cache N3 do Dynamic V\n");
+    printf("  dynamicv diagnostico    Diagnóstico de ambiente + benchmark miss/hit\n");
     printf("  independencia install <pacote|URL> [-g]   Instala dependencia (alias: des i)\n");
     printf("  independencia desinstalar <pacote|URL>    Remove dependencia (alias: des des)\n");
     printf("  independencia list                        Lista dependencias (alias: des list)\n");
@@ -92,7 +73,9 @@ static void print_help(void) {
 int main(int argc, char** argv) {
     if (argc < 2) {
         ng_native_modules_init();
-        return ng_repl_run();
+        int rc = ng_repl_run();
+        ng_outbuf_flush();
+        return rc;
     }
 
     const char* cmd = argv[1];
@@ -114,10 +97,24 @@ int main(int argc, char** argv) {
         return 0;
     }
 
+    if (strcmp(cmd, "dynamicv") == 0) {
+        if (argc < 3) {
+            fprintf(stderr, "Uso: ng dynamicv <status|cache|limpar|diagnostico>\n");
+            return 1;
+        }
+        if (strcmp(argv[2], "status") == 0) { ng_dynamicv_status(stdout); return 0; }
+        if (strcmp(argv[2], "cache") == 0) { ng_dynamicv_cache_info(stdout); return 0; }
+        if (strcmp(argv[2], "limpar") == 0) { ng_dynamicv_clean_cache(); return 0; }
+        if (strcmp(argv[2], "diagnostico") == 0) { ng_dynamicv_diagnostico(stdout); return 0; }
+        fprintf(stderr, "Subcomando desconhecido: '%s'.\n", argv[2]);
+        return 1;
+    }
+
     if (strcmp(cmd, "executar") == 0 || strcmp(cmd, "verificar") == 0 || strcmp(cmd, "compilar") == 0) {
         if (argc < 3) {
             fprintf(stderr, "Erro: Arquivo '.ng' nao especificado.\n");
             fprintf(stderr, "Uso: ng %s <arquivo.ng>\n", cmd);
+            ng_outbuf_flush();
             return 1;
         }
 
@@ -136,6 +133,7 @@ int main(int argc, char** argv) {
         if (!source) {
             ng_error_print(NG_ERR_FILE_NOT_FOUND, "Arquivo Nao Encontrado", filepath, 0, 0,
                            "Nao foi possivel abrir o arquivo especificado.", "Verifique o caminho do arquivo '.ng'.");
+            ng_outbuf_flush();
             return 1;
         }
 
@@ -168,6 +166,7 @@ int main(int argc, char** argv) {
 
         if (v_error) {
             free(source);
+            ng_outbuf_flush();
             return 1;
         }
 
@@ -175,6 +174,7 @@ int main(int argc, char** argv) {
             printf("[NG] Sintaxe verificada com sucesso em '%s'. Nenhum erro encontrado.\n", filepath);
             ng_ast_free(program);
             free(source);
+            ng_outbuf_flush();
             return 0;
         }
 
@@ -182,6 +182,7 @@ int main(int argc, char** argv) {
             printf("[NG/N3] AST compilada e cache salvo para '%s'.\n", filepath);
             ng_ast_free(program);
             free(source);
+            ng_outbuf_flush();
             return 0;
         }
 
@@ -194,7 +195,7 @@ int main(int argc, char** argv) {
         ng_interp_cleanup(&interp);
         ng_ast_free(program);
         free(source);
-
+        ng_outbuf_flush();
         return success ? 0 : 1;
     }
 
@@ -208,5 +209,6 @@ int main(int argc, char** argv) {
     }
 
     fprintf(stderr, "Comando desconhecido: '%s'. Digite 'ng ajuda' para opcoes disponiveis.\n", cmd);
+    ng_outbuf_flush();
     return 1;
 }

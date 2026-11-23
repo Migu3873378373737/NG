@@ -6,8 +6,11 @@
 #include <sys/stat.h>
 #include <dirent.h>
 #include <unistd.h>
+#include <stdatomic.h>
 
 #define N3_CACHE_DIR ".n3cache"
+
+static _Atomic size_t g_n3_max_bytes = N3_CACHE_DEFAULT_MAX_BYTES;
 
 void ng_sha256(const unsigned char* data, size_t len, unsigned char hash[32]) {
     uint32_t h0 = 0x6a09e667, h1 = 0xbb67ae85, h2 = 0x3c6ef372, h3 = 0xa54ff53a;
@@ -82,11 +85,124 @@ bool n3_cache_store(const char* filepath, const char* compiled_blob, size_t size
     }
     char cpath[256];
     get_cache_path(filepath, cpath, sizeof(cpath));
-    FILE* f = fopen(cpath, "wb");
+
+    /* Escrita atômica: grava em arquivo temporário e faz rename */
+    char tmppath[512];
+    snprintf(tmppath, sizeof(tmppath), "%s/tmp_%d_%ld.n3c", N3_CACHE_DIR, (int)getpid(), (long)rand());
+    FILE* f = fopen(tmppath, "wb");
     if (!f) return false;
-    fwrite(compiled_blob, 1, size, f);
+    if (fwrite(compiled_blob, 1, size, f) != size) {
+        fclose(f);
+        unlink(tmppath);
+        return false;
+    }
+    fflush(f);
     fclose(f);
+    if (rename(tmppath, cpath) != 0) {
+        unlink(tmppath);
+        return false;
+    }
+    /* Limite de bytes total do cache + retenção LRU (Dynamic V) */
+    if (n3_cache_total_bytes() > n3_cache_get_max_bytes()) {
+        n3_cache_sweep_retention();
+    }
+    if (n3_cache_total_bytes() > n3_cache_get_max_bytes() &&
+        size > n3_cache_get_max_bytes()) {
+        /* A própria entry excede o limite: invalida a entry */
+        n3_cache_remove_entry(filepath);
+        return false;
+    }
     return true;
+}
+
+size_t n3_cache_count_entries(void) {
+    return count_cache_entries();
+}
+
+size_t n3_cache_total_bytes(void) {
+    DIR* d = opendir(N3_CACHE_DIR);
+    if (!d) return 0;
+    struct dirent* entry;
+    char path[512];
+    struct stat st;
+    size_t total = 0;
+    while ((entry = readdir(d)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
+        snprintf(path, sizeof(path), "%s/%s", N3_CACHE_DIR, entry->d_name);
+        if (stat(path, &st) == 0 && S_ISREG(st.st_mode)) {
+            total += (size_t)st.st_size;
+        }
+    }
+    closedir(d);
+    return total;
+}
+
+void n3_cache_remove_entry(const char* filepath) {
+    char cpath[256];
+    get_cache_path(filepath, cpath, sizeof(cpath));
+    unlink(cpath);
+}
+
+void n3_cache_set_max_bytes(size_t max_bytes) { atomic_store(&g_n3_max_bytes, max_bytes); }
+size_t n3_cache_get_max_bytes(void) { return atomic_load(&g_n3_max_bytes); }
+
+typedef struct {
+    char path[600];
+    time_t mtime;
+    size_t size;
+} N3Entry;
+
+static int n3_cmp_mtime(const void* a, const void* b) {
+    const N3Entry* ea = (const N3Entry*)a;
+    const N3Entry* eb = (const N3Entry*)b;
+    if (ea->mtime < eb->mtime) return -1;
+    if (ea->mtime > eb->mtime) return 1;
+    return 0;
+}
+
+void n3_cache_sweep_retention(void) {
+    size_t max = n3_cache_get_max_bytes();
+    if (n3_cache_total_bytes() <= max) return;
+    DIR* d = opendir(N3_CACHE_DIR);
+    if (!d) return;
+    N3Entry* entries = NULL;
+    size_t count = 0, cap = 0;
+    struct dirent* ent;
+    while ((ent = readdir(d)) != NULL) {
+        if (ent->d_name[0] == '.' || ent->d_name[0] == 't') continue; /* ignora "tmp_*" */
+        char path[600];
+        snprintf(path, sizeof(path), "%s/%s", N3_CACHE_DIR, ent->d_name);
+        struct stat st;
+        if (stat(path, &st) != 0 || !S_ISREG(st.st_mode)) continue;
+        if (count == cap) {
+            cap = cap ? cap * 2 : 64;
+            N3Entry* p = (N3Entry*)realloc(entries, cap * sizeof(N3Entry));
+            if (!p) break;
+            entries = p;
+        }
+        snprintf(entries[count].path, sizeof(entries[count].path), "%s", path);
+        entries[count].mtime = st.st_mtime;
+        entries[count].size = (size_t)st.st_size;
+        count++;
+    }
+    closedir(d);
+    qsort(entries, count, sizeof(N3Entry), n3_cmp_mtime);
+    size_t total = n3_cache_total_bytes();
+    for (size_t i = 0; i < count && total > max; i++) {
+        if (unlink(entries[i].path) == 0) total -= entries[i].size;
+    }
+    free(entries);
+}
+
+bool n3_cache_entry_valid(const char* filepath) {
+    char cpath[256];
+    get_cache_path(filepath, cpath, sizeof(cpath));
+    FILE* f = fopen(cpath, "rb");
+    if (!f) return false;
+    char magic[5] = {0};
+    bool ok = fread(magic, 1, 4, f) == 4 && memcmp(magic, "N3C1", 4) == 0;
+    fclose(f);
+    return ok;
 }
 
 char* n3_cache_load(const char* filepath, size_t* out_size) {
@@ -472,7 +588,7 @@ NGAstNode* n3_cache_load_ast(const char* filepath, const char* source) {
     size_t sz = 0;
     char* data = n3_cache_load(filepath, &sz);
     if (!data || sz < 4 + 4 + 64) {
-        free(data);
+        if (data) free(data);
         return NULL;
     }
 
@@ -481,6 +597,7 @@ NGAstNode* n3_cache_load_ast(const char* filepath, const char* source) {
     r_read(&r, magic, 4);
     if (memcmp(magic, "N3C1", 4) != 0) {
         free(data);
+        n3_cache_remove_entry(filepath);
         return NULL;
     }
 
@@ -488,6 +605,7 @@ NGAstNode* n3_cache_load_ast(const char* filepath, const char* source) {
     if (!ver || strcmp(ver, NG_VERSION) != 0) {
         free(ver);
         free(data);
+        n3_cache_remove_entry(filepath);
         return NULL;
     }
     free(ver);
@@ -502,6 +620,8 @@ NGAstNode* n3_cache_load_ast(const char* filepath, const char* source) {
 
     if (strcmp(cached_hash, current_hash) != 0) {
         free(data);
+        /* Hash diferente significa que o fonte mudou -> invalida entrada */
+        n3_cache_remove_entry(filepath);
         return NULL;
     }
 
