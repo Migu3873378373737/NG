@@ -1,7 +1,11 @@
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
+#ifdef _WIN32
+/* MinGW fornece Winsock2; nao definir _POSIX_C_SOURCE. */
+#else
 #define _POSIX_C_SOURCE 200809L
+#endif
 
 #include "ng_net_libs.h"
 #include "ng_native_module.h"
@@ -14,6 +18,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
+#ifdef _WIN32
+#include "../compat/windows/net_compat.h"
+#include "../compat/windows/posix_compat.h"
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -21,6 +32,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <errno.h>
+#endif
 
 /* DNS Module */
 static NGValue native_dns_resolve(NGInterpreter* interp, NGValue* args, size_t argc) {

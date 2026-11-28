@@ -1,0 +1,6 @@
+# Modulo Proxy Nativo NG
+Importar @proxy
+
+Função Encaminhar(req, destino) [
+    Y = Proxy.Forward(req, destino)
+]

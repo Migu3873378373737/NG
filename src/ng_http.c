@@ -1,7 +1,11 @@
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
+#ifdef _WIN32
+/* MinGW fornece os cabecalhos Win32/Winsock2; nao definir _POSIX_C_SOURCE. */
+#else
 #define _POSIX_C_SOURCE 200809L
+#endif
 
 #include "ng_http.h"
 #include "ng_json.h"
@@ -14,17 +18,30 @@
 #include <string.h>
 #include <stdbool.h>
 #include <ctype.h>
+#include <stdint.h>
+#include <errno.h>
 
 #include <sys/types.h>
+#ifdef _WIN32
+#include "../compat/windows/net_compat.h"
+#include "../compat/windows/poll_compat.h"
+#include "../compat/windows/unistd_ext_compat.h"
+#include "../compat/windows/string_compat.h"
+#include "../compat/windows/sys_compat.h"
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <unistd.h>
-#include <fcntl.h>
 #include <poll.h>
-#include <errno.h>
+#endif
+#ifndef _WIN32
+#include <fcntl.h>
+#endif
 
 #ifdef NG_HAS_OPENSSL
 #include <openssl/ssl.h>
@@ -247,8 +264,8 @@ static ClientResponse execute_http_client(const char* method, const char* url,
     struct timeval tv;
     tv.tv_sec = timeout_sec > 0 ? timeout_sec : 10;
     tv.tv_usec = 0;
-    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
-    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (const char*)&tv, sizeof(tv));
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)(&tv), (int)sizeof(tv));
+    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (const char*)(&tv), (int)sizeof(tv));
 
     if (connect(sock, res0->ai_addr, res0->ai_addrlen) < 0) {
         close(sock);
@@ -745,8 +762,8 @@ static void handle_client_connection(NGHttpServerInstance* s, int client_fd) {
     struct timeval tv;
     tv.tv_sec = 5;
     tv.tv_usec = 0;
-    setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
-    setsockopt(client_fd, SOL_SOCKET, SO_SNDTIMEO, (const char*)&tv, sizeof(tv));
+    setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)(&tv), (int)sizeof(tv));
+    setsockopt(client_fd, SOL_SOCKET, SO_SNDTIMEO, (const char*)(&tv), (int)sizeof(tv));
 
     size_t req_cap = 8192;
     size_t req_len = 0;
@@ -1020,7 +1037,12 @@ static NGValue native_server_listen(NGInterpreter* interp, NGValue* args, size_t
     }
 
     int opt = 1;
-    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    {
+        /* Winsock espera optval como ponteiro para os bytes da opcao. */
+        char optval[sizeof(int)];
+        memcpy(optval, &opt, sizeof(opt));
+        setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, optval, sizeof(opt));
+    }
 
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));

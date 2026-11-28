@@ -1,0 +1,10 @@
+# Loop aninhado
+Linhas = [1, 2]
+Colunas = ["A", "B", "C"]
+
+Loop L in Linhas [
+    Loop C in Colunas [
+        Print L
+        Print C
+    ]
+]

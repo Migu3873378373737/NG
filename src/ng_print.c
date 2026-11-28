@@ -16,8 +16,12 @@ void ng_print_modules_load(NGInterpreter* interp);
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#ifdef _WIN32
+#include "../compat/windows/posix_compat.h"
+#else
 #include <sys/utsname.h>
 #include <sys/sysinfo.h>
+#endif
 
 /* ------------------------------------------------------------------ */
 /* Buffer auxiliar                                                      */

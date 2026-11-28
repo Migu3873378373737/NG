@@ -7,6 +7,12 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#ifdef _WIN32
+/* clock_gettime -> QueryPerformanceCounter: o MinGW declara clock_gettime()
+   como inline que chama clock_gettime64() da libwinpthread, ausente no
+   runtime Windows da NG. */
+#include "../compat/windows/posix_compat.h"
+#endif
 
 static NGL2Bus g_l2;
 static bool g_l2_initialized = false;

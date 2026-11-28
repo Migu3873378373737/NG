@@ -13,6 +13,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef _WIN32
+/* setenv/unsetenv/getenv: implementacoes Win32 com semantica de `overwrite`
+   (o _putenv_s puro ignorava overwrite=0 e sobrescrevia variaveis do usuario). */
+#include "../compat/windows/posix_compat.h"
+#endif
+
 /* ============================================================
  * Dynamic V Dual-Core (Invicta):
  *   - Core 0 (C11): executor / runtime nativo e fallback.
@@ -53,6 +59,7 @@ static void print_help(void) {
     printf("Uso: ng [comando] [argumentos]\n\n");
     printf("Sem argumentos, inicia o REPL interativo (digite 'sair' ou Ctrl+D para encerrar).\n\n");
     printf("Comandos principais:\n");
+    printf("  <arquivo.ng>            Atalho: o mesmo que 'executar <arquivo.ng>'\n");
     printf("  executar <arquivo.ng>   Executa um programa NG\n");
     printf("    --subinterpreter      Ativa subinterpretador isolado\n");
     printf("    --no-subinterpreter   Desativa subinterpretador (padrao)\n");
@@ -76,6 +83,34 @@ int main(int argc, char** argv) {
         int rc = ng_repl_run();
         ng_outbuf_flush();
         return rc;
+    }
+
+    /* Android/Termux: o JIT (mmap RWX) faz o sistema matar o processo; desliga por padrao.
+       Para ligar mesmo assim: NG_JIT_DISABLE=0 ng programa.ng */
+#ifdef __ANDROID__
+    setenv("NG_JIT_DISABLE", "1", 0);
+#endif
+
+    /* Saida imediata: sem isso o Print so aparecia quando o programa terminava,
+       e um bot em loop parecia "travado" sem escrever nada. */
+    setenv("NG_OUTBUF_DISABLE", "1", 0);
+    setvbuf(stdout, NULL, _IOLBF, 0);
+
+    /* Atalho: "ng programa.ng [args]" equivale a "ng executar programa.ng [args]". */
+    char** atalho_argv = NULL;
+    {
+        size_t n = strlen(argv[1]);
+        if (n > 3 && strcmp(argv[1] + n - 3, ".ng") == 0) {
+            atalho_argv = (char**)malloc(sizeof(char*) * (size_t)(argc + 2));
+            if (atalho_argv) {
+                atalho_argv[0] = argv[0];
+                atalho_argv[1] = (char*)"executar";
+                for (int i = 1; i < argc; i++) atalho_argv[i + 1] = argv[i];
+                atalho_argv[argc + 1] = NULL;
+                argv = atalho_argv;
+                argc += 1;
+            }
+        }
     }
 
     const char* cmd = argv[1];

@@ -1,0 +1,6 @@
+# Biblioteca Padrao: crypto
+Importar @crypto
+
+Função Sha256(texto) [
+    Y = Crypto.Sha256(texto)
+]

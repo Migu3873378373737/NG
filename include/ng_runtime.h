@@ -2,6 +2,7 @@
 #define NG_RUNTIME_H
 
 #include "ng_value.h"
+#include <stdio.h>
 
 typedef struct NGEntry {
     char* key;

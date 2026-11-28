@@ -20,6 +20,11 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <dirent.h>
+#ifdef _WIN32
+#include "../compat/windows/posix_compat.h"
+/* mkdir(path, mode) -> _mkdir(path) no Windows */
+#include "../compat/windows/dir_compat.h"
+#endif
 
 /* 1. fs */
 static NGValue ng_fs_read(NGInterpreter* interp, NGValue* args, size_t argc) {

@@ -1,0 +1,13 @@
+Idade = 20
+
+Se Idade >= 18 [
+    Print "Maior de idade"
+] Senao [
+    Print "Menor de idade"
+]
+
+Contador = 1
+Enquanto Contador <= 3 [
+    Print Contador
+    Contador = Contador + 1
+]

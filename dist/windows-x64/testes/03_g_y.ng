@@ -1,0 +1,5 @@
+Y = "NG funcionando com canal G/Y"
+G Y
+
+Y = "Segundo valor emitido"
+G Y

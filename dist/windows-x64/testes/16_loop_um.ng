@@ -1,0 +1,6 @@
+# Loop com um unico elemento
+Nomes = ["Carlos"]
+
+Loop Nome in Nomes [
+    Print Nome
+]

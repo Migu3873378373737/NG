@@ -1,0 +1,6 @@
+# Biblioteca Padrao: sys
+Importar @sys
+
+Função Sair(codigo) [
+    Sys.Exit(codigo)
+]

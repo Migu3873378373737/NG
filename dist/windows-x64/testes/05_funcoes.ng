@@ -1,0 +1,6 @@
+Função Saudacao(Nome) [
+    Print "Ola"
+    Print Nome
+]
+
+Saudacao("Miguel")

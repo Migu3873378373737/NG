@@ -78,7 +78,9 @@ bool ng_module_load_into_env(const char* module_name, NGInterpreter* interp) {
         ng_interp_run(interp, mod_ast);
     }
 
-    ng_ast_free(mod_ast);
-    free(src);
+    /* IMPORTANTE: NAO liberar mod_ast nem src. As funcoes definidas no modulo guardam
+       ponteiros para o corpo na AST; liberar aqui deixava toda funcao de modulo
+       "vazia" (retornava null sem executar nada). O custo e so um pouco de memoria. */
+    (void)mod_ast;
     return !par.has_error;
 }

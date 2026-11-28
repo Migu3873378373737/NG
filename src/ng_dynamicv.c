@@ -15,8 +15,15 @@
 #include <string.h>
 #include <time.h>
 #include <math.h>
+#ifdef _WIN32
+#include "../compat/windows/pthread.h"
+#include "../compat/windows/rusage_compat.h"
+#include "../compat/windows/unistd_compat.h"
+#else
 #include <unistd.h>
 #include <sys/resource.h>
+#include <pthread.h>
+#endif
 
 #ifdef NG_HAS_EMBEDDED_LUA
 #include <lua.h>

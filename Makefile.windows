@@ -1,0 +1,45 @@
+CC = x86_64-w64-mingw32-clang
+
+OPT_LEVEL ?= -O2
+LTO ?=
+
+WINROOT = $(PREFIX)/opt/llvm-mingw-w64
+CLANGINC = $(PREFIX)/lib/clang/21/include
+WININC = $(WINROOT)/generic-w64-mingw32/include
+ZLIB_INC = $(PREFIX)/include
+ZLIB_LIB = $(WINROOT)/x86_64-w64-mingw32/lib
+
+CFLAGS = -D_GNU_SOURCE -DNG_NO_CURL -DNG_NO_SQLITE -DNG_NO_ZLIB -D_WIN32_WINNT=0x0600 \
+        -Wall -Wextra -std=c11 $(OPT_LEVEL) $(LTO) \
+        -Iinclude -Icompat/windows \
+        -isystem $(CLANGINC) \
+        -isystem $(WININC) \
+        -ffunction-sections -fdata-sections
+
+LDFLAGS = -lm -lws2_32 -lpsapi -lbcrypt $(LTO) -Wl,--gc-sections -Wl,-s
+
+SRC = src/main.c src/lexer.c src/parser.c src/ast.c \
+      src/runtime.c src/value.c src/interpreter.c src/module.c \
+      src/ng_native_module.c src/ng_json.c src/ng_http.c \
+      src/ng_http_client.c src/ng_net_libs.c \
+      src/ng_transpiler_lua.c src/ng_stdlib.c src/ng_n3cache.c \
+      src/repl.c src/ng_process.c src/ng_dependency.c \
+      src/ng_interop.c src/ng_collection.c src/ng_sqlite.c \
+      src/ng_print.c src/ng_dynamicv.c src/ng_l2.c src/ng_ir.c \
+      src/ng_lua_optimizer.c src/ng_outbuf.c src/ng_jit.c \
+      src/ng_qr.c src/ng_cripto.c src/ng_ws.c src/ng_zap.c \
+      src/ng_wacore.c
+
+TARGET = bin/windows/ng.exe
+
+all: $(TARGET)
+
+$(TARGET): $(SRC)
+	@mkdir -p bin/windows
+	$(CC) $(CFLAGS) $(SRC) -o $(TARGET) $(LDFLAGS)
+	@echo "NG Windows build finalizado: $(TARGET)"
+
+clean:
+	rm -f $(TARGET)
+
+.PHONY: all clean

@@ -9,8 +9,12 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#include "../compat/windows/mmap_compat.h"
+#else
 #include <sys/mman.h>
 #include <unistd.h>
+#endif
 #include <errno.h>
 
 /* Dynamic V "Core 0b": JIT nativo (aarch64) para hot paths/funções/loops.

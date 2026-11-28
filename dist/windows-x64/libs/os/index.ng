@@ -1,0 +1,10 @@
+# Biblioteca Padrao: os
+Importar @os
+
+Função Plataforma() [
+    Y = OS.Platform()
+]
+
+Função DiretorioAtual() [
+    Y = OS.Cwd()
+]

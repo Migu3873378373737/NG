@@ -1,0 +1,3 @@
+Y = "Linha unica em Y sem substituicao"
+G Y
+Print "Y preservado perfeitamente."

@@ -1,5 +1,7 @@
 # NG (Next Generation) Language
 
+> 📘 **Documentação completa da linguagem**: [`DOCUMENTACAO.md`](DOCUMENTACAO.md)
+
 Linguagem de programação independente, com identidade sintática própria, interpretador nativo, AST modular e CLI construído em **C puro (padrão ISO C11)**.
 
 ---

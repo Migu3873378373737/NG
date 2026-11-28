@@ -6,7 +6,7 @@ LTO ?= -flto
 CFLAGS = -D_GNU_SOURCE -Wall -Wextra -std=c11 $(OPT_LEVEL) $(LTO) -Iinclude \
          -ffunction-sections -fdata-sections \
          -fno-asynchronous-unwind-tables -fno-unwind-tables
-LDFLAGS = -lm -lpthread $(LTO) -Wl,--gc-sections -Wl,-s
+LDFLAGS = -lm -lpthread -lz $(LTO) -Wl,--gc-sections -Wl,-s
 
 OPENSSL_INC ?= /data/data/com.termux/files/usr/include
 OPENSSL_LIB ?= /data/data/com.termux/files/usr/lib
@@ -28,6 +28,19 @@ ifeq ($(shell test -f $(CURL_INC)/curl/curl.h && echo yes),yes)
     LDFLAGS += -L$(CURL_LIB) -lcurl
 else ifeq ($(shell test -f /usr/include/curl/curl.h && echo yes),yes)
     LDFLAGS += -lcurl
+else
+    CFLAGS += -DNG_NO_CURL
+endif
+
+# libsodium (opcional): usada pelo @wacore para XEdDSA/Curve25519 sign.
+SODIUM_INC ?= /data/data/com.termux/files/usr/include
+SODIUM_LIB ?= /data/data/com.termux/files/usr/lib
+ifeq ($(shell test -f $(SODIUM_INC)/sodium.h && echo yes),yes)
+    CFLAGS += -DNG_HAS_SODIUM -I$(SODIUM_INC)
+    LDFLAGS += -L$(SODIUM_LIB) -lsodium
+else ifeq ($(shell test -f /usr/include/sodium.h && echo yes),yes)
+    CFLAGS += -DNG_HAS_SODIUM
+    LDFLAGS += -lsodium
 endif
 
 # SQLite nativo (opcional: sem ele o modulo @sqlite reporta indisponibilidade)
@@ -42,7 +55,7 @@ else
     CFLAGS += -DNG_NO_SQLITE
 endif
 
-SRC = src/main.c src/lexer.c src/parser.c src/ast.c src/runtime.c src/value.c src/interpreter.c src/module.c src/ng_native_module.c src/ng_json.c src/ng_http.c src/ng_http_client.c src/ng_net_libs.c src/ng_transpiler_lua.c src/ng_stdlib.c src/ng_n3cache.c src/repl.c src/ng_process.c src/ng_dependency.c src/ng_interop.c src/ng_collection.c src/ng_sqlite.c src/ng_print.c src/ng_dynamicv.c src/ng_l2.c src/ng_ir.c src/ng_lua_optimizer.c src/ng_outbuf.c src/ng_jit.c
+SRC = src/main.c src/lexer.c src/parser.c src/ast.c src/runtime.c src/value.c src/interpreter.c src/module.c src/ng_native_module.c src/ng_json.c src/ng_http.c src/ng_http_client.c src/ng_net_libs.c src/ng_transpiler_lua.c src/ng_stdlib.c src/ng_n3cache.c src/repl.c src/ng_process.c src/ng_dependency.c src/ng_interop.c src/ng_collection.c src/ng_sqlite.c src/ng_print.c src/ng_dynamicv.c src/ng_l2.c src/ng_ir.c src/ng_lua_optimizer.c src/ng_outbuf.c src/ng_jit.c src/ng_qr.c src/ng_cripto.c src/ng_ws.c src/ng_zap.c src/ng_wacore.c
 BINDIR = bin
 TARGET = $(BINDIR)/ng
 # Em Android/Termux o /storage costuma ser noexec: os testes rodam uma copia
@@ -81,7 +94,8 @@ $(TMPRUN): $(TARGET)
 	@cp $(TARGET) $(TMPRUN) && chmod +x $(TMPRUN)
 
 clean:
-	rm -rf $(BINDIR)
+	rm -f $(TARGET)
+	# preserva $(BINDIR)/windows (build Windows via Makefile.windows)
 
 test: $(TMPRUN)
 	@echo "== Executando Testes NG =="

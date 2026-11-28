@@ -11,6 +11,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#ifdef _WIN32
+#include "../compat/windows/posix_compat.h"
+#endif
 #include <unistd.h>
 
 static const char* interop_extension(const char* lang) {
@@ -30,12 +33,42 @@ static const char* interop_temp_dir(void) {
         struct stat st;
         if (stat(path, &st) == 0) return path;
     }
+#ifdef _WIN32
+    /* Windows: diretorio temporario do sistema (TMP/TEMP via GetTempPath). */
+    {
+        static char wtmp[512];
+        DWORD n = GetTempPathA((DWORD)sizeof(wtmp), wtmp);
+        if (n > 0 && n < sizeof(wtmp)) {
+            while (n > 0 && (wtmp[n - 1] == '\\' || wtmp[n - 1] == '/')) wtmp[--n] = '\0';
+            return wtmp;
+        }
+    }
+    return ".";
+#else
     return "/tmp";
+#endif
 }
 
 static char* interop_write_temp(const char* code, const char* ext) {
     char templ[768];
     snprintf(templ, sizeof(templ), "%s/ng_interop_XXXXXX.%s", interop_temp_dir(), ext);
+#ifdef _WIN32
+    /* mkstemp do MinGW exige "XXXXXX" no fim do template: cria o arquivo sem
+       sufixo e renomeia para manter a extensao que o runner de interop usa. */
+    char base[768];
+    snprintf(base, sizeof(base), "%s/ng_interop_XXXXXX", interop_temp_dir());
+    int fd = mkstemp(base);
+    if (fd < 0) return NULL;
+    if (close(fd) != 0) { remove(base); return NULL; }
+    char final[800];
+    snprintf(final, sizeof(final), "%s.%s", base, ext);
+    if (rename(base, final) != 0) { remove(base); return NULL; }
+    FILE* f = fopen(final, "w");
+    if (!f) { remove(final); return NULL; }
+    fputs(code, f);
+    fclose(f);
+    return strdup(final);
+#else
     int fd = mkstemps(templ, (int)strlen(ext) + 1);
     if (fd < 0) return NULL;
 
@@ -48,6 +81,7 @@ static char* interop_write_temp(const char* code, const char* ext) {
     fputs(code, f);
     fclose(f);
     return strdup(templ);
+#endif
 }
 
 static char* interop_trim_copy(const char* text) {

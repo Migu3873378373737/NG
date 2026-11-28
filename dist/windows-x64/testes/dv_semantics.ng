@@ -1,0 +1,47 @@
+A = 3 * 4 + 5
+B = A * 2
+C = B - A
+D = C / 2
+E = D * 0 + 1
+Print A
+Print B
+Print C
+Print D
+Print E
+F = 10 + 20
+H = F - 5
+Print H
+
+Função Dobro(x) [
+    Y = x * 2
+]
+
+Função Quadrado(n) [
+    Y = n * n
+]
+
+Print Dobro(21)
+Print Quadrado(7)
+
+Total = 0
+Enquanto Total < 5 [
+    Total = Total + 1
+]
+Print Total
+
+Lista = ["a", "b", "c"]
+Loop Item in Lista [
+    Print Item
+]
+
+Se 2 > 1 [
+    Print "sim"
+] Senao [
+    Print "nao"
+]
+
+Soma = 0
+Loop J in [1, 2, 3, 4] [
+    Soma = Soma + J
+]
+Print Soma

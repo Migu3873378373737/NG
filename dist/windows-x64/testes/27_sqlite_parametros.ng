@@ -1,0 +1,31 @@
+# Sistema de parametros/comandos de biblioteca
+Importar @sqlite
+Importar @json
+
+Banco = SQLite(":memory:")
+Banco.CriarTabela("CREATE TABLE usuarios (id INTEGER PRIMARY KEY, nome TEXT)")
+
+Print "--- parametro listar ---"
+Parametro = Banco.Params("listar")
+Print Parametro
+
+Print "--- parametro criar tabela ---"
+Print Banco.Params("criar tabela", "CREATE TABLE notas (id INTEGER PRIMARY KEY, texto TEXT)")
+
+Print "--- parametro inserir usuario ---"
+Print Banco.Params("inserir usuario", "usuarios", JSON.Parse("{\"id\":1,\"nome\":\"Maria\"}"))
+
+Print "--- parametro consultar usuarios ---"
+Print Banco.Params("consultar usuarios", "SELECT nome FROM usuarios", [])
+
+Print "--- parametro estrutura ---"
+Print Banco.Params("estrutura", "usuarios")
+
+Print "--- parametro desconhecido (deve mostrar ajuda) ---"
+Print Banco.Params("nao existe")
+
+Print "--- funcao global list() ---"
+Print list("listar")
+Print list("versao")
+
+Banco.Fechar()

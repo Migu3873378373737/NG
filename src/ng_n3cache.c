@@ -7,6 +7,11 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <stdatomic.h>
+#ifdef _WIN32
+#include "../compat/windows/posix_compat.h"
+/* mkdir(path, mode) -> _mkdir(path) no Windows */
+#include "../compat/windows/dir_compat.h"
+#endif
 
 #define N3_CACHE_DIR ".n3cache"
 

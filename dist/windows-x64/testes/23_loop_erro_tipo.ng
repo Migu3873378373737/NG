@@ -1,0 +1,8 @@
+# Erro de runtime: colecao invalida no Loop
+NaoLista = 42
+
+Loop X in NaoLista [
+    Print X
+]
+
+Print "apos erro"

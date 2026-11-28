@@ -4,6 +4,10 @@
 #ifndef NG_NO_CURL
 #include "ng_http_client.h"
 #endif
+#ifdef _WIN32
+/* mkdir(path, mode) -> _mkdir(path) no Windows (lstat nao existe la) */
+#include "../compat/windows/dir_compat.h"
+#endif
 
 #include <ctype.h>
 #include <dirent.h>
@@ -63,7 +67,6 @@ static bool dep_is_dir(const char* path) {
     struct stat st;
     return path && stat(path, &st) == 0 && S_ISDIR(st.st_mode);
 }
-
 static bool dep_mkdir_p(const char* path) {
     if (!path || !*path) return false;
     char tmp[DEP_PATH_MAX];
@@ -86,7 +89,11 @@ static bool dep_mkdir_p(const char* path) {
 static void dep_remove_path(const char* path) {
     if (!path || !*path) return;
     struct stat st;
+#ifdef _WIN32
+    if (stat(path, &st) != 0) return;   /* sem symlinks no fluxo Windows */
+#else
     if (lstat(path, &st) != 0) return;
+#endif
 
     if (S_ISDIR(st.st_mode)) {
         DIR* d = opendir(path);

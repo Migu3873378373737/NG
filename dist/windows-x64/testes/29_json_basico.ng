@@ -1,0 +1,31 @@
+# JSON real: ler, validar, percorrer, manipular, formatar e gravar
+Importar @json
+Importar @fs
+
+Print "--- validacao ---"
+Print JSON.Validar("{\"ok\":true}")
+Print JSON.Validar("{quebrado")
+Print JSON.Tipo("[1,2,3]")
+Print JSON.Tipo("\"texto\"")
+
+Print "--- leitura de arquivo ---"
+Dados = JSON.Ler("testes/dados.json")
+Print Dados
+Print JSON.Tamanho(Dados)
+
+Loop Pessoa in Dados [
+    Print Pessoa.nome
+]
+
+Print "--- manipulacao ---"
+JSON.Definir(Dados[0], "cidade", "São Paulo")
+Print JSON.Obter(Dados[0], "cidade")
+Print JSON.Chaves(Dados[0])
+Print JSON.Remover(Dados[0], "idade")
+Print JSON.Formatar(Dados)
+
+Print "--- gravacao ---"
+Print JSON.Gravar("testes/_json_saida.json", Dados)
+Relido = JSON.Ler("testes/_json_saida.json")
+Print JSON.Tamanho(Relido)
+FS.Remove("testes/_json_saida.json")

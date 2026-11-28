@@ -1,0 +1,22 @@
+# Modulo MyLanguage Nativo NG (JS, Lua, Python)
+Importar @MyLanguage
+
+Função Executar(linguagem, codigo) [
+    Y = MyLanguage.Executar(linguagem, codigo)
+]
+
+Função Python(codigo) [
+    Y = MyLanguage.Python(codigo)
+]
+
+Função JavaScript(codigo) [
+    Y = MyLanguage.JavaScript(codigo)
+]
+
+Função Lua(codigo) [
+    Y = MyLanguage.Lua(codigo)
+]
+
+Função Transpilar(codigo, linguagem) [
+    Y = MyLanguage.Transpilar(codigo, linguagem)
+]

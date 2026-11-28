@@ -5,6 +5,11 @@
 #include "ng_json.h"
 #include "ng_interop.h"
 #include "ng_print.h"
+#include "ng_qr.h"
+#include "ng_cripto.h"
+#include "ng_ws.h"
+#include "ng_zap.h"
+#include "ng_wacore.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -72,4 +77,9 @@ void ng_native_modules_init(void) {
     ng_net_modules_register();
     ng_interop_module_register();
     ng_print_modules_register();
+    ng_qr_module_register();
+    ng_cripto_module_register();
+    ng_ws_module_register();
+    ng_zap_module_register();
+    ng_wacore_module_register();
 }

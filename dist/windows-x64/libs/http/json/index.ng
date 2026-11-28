@@ -1,0 +1,10 @@
+# Modulo JSON Nativo NG
+Importar @json
+
+Função Parse(texto) [
+    Y = JSON.Parse(texto)
+]
+
+Função Stringify(objeto) [
+    Y = JSON.Stringify(objeto)
+]

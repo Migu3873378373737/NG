@@ -5,6 +5,7 @@
 #include "ng_http_client.h"
 #include "ng_runtime.h"
 #include "ng_native_module.h"
+#ifndef NG_NO_CURL
 #include <curl/curl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -296,3 +297,21 @@ void ng_http_module_register(NGInterpreter* interp) {
     (void)interp;
     ng_native_module_register("http", http_client_module_loader);
 }
+#else /* NG_NO_CURL: sem libcurl o cliente HTTP fica desativado (o @http de ng_http.c continua) */
+void ng_http_response_free(NGHttpResponse* r) { (void)r; }
+NGHttpResponse* ng_http_request(const char* method, const char* url,
+                                 const char** header_keys, const char** header_vals,
+                                 size_t header_count,
+                                 const char* body, size_t body_len, long timeout_ms) {
+    (void)method; (void)url; (void)header_keys; (void)header_vals;
+    (void)header_count; (void)body; (void)body_len; (void)timeout_ms;
+    return NULL;
+}
+NGHttpResponse* ng_http_get(const char* url, long timeout_ms) { (void)url; (void)timeout_ms; return NULL; }
+NGHttpResponse* ng_http_post(const char* url, const char* body,
+                              const char* content_type, long timeout_ms) {
+    (void)url; (void)body; (void)content_type; (void)timeout_ms;
+    return NULL;
+}
+void ng_http_module_register(NGInterpreter* interp) { (void)interp; }
+#endif /* NG_NO_CURL */
