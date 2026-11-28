@@ -1,0 +1,6 @@
+# Biblioteca Padrao: xml
+Importar @xml
+
+Função Parse(texto) [
+    Y = XML.Parse(texto)
+]

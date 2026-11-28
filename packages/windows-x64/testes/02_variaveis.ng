@@ -1,0 +1,7 @@
+Nome = "Miguel"
+Idade = 20
+Velocidade = 5.5
+
+Print Nome
+Print Idade
+Print Velocidade

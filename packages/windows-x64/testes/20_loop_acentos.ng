@@ -1,0 +1,6 @@
+# UTF-8: nomes com acentos
+Nomes = ["Ângela", "João", "José", "Conceição"]
+
+Loop Nome in Nomes [
+    Print Nome
+]

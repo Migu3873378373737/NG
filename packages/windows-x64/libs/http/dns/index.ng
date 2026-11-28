@@ -1,0 +1,14 @@
+# Modulo DNS Nativo NG
+Importar @dns
+
+Função Resolver(host) [
+    Y = DNS.Resolve(host)
+]
+
+Função ResolverA(host) [
+    Y = DNS.ResolveA(host)
+]
+
+Função Reverso(ip) [
+    Y = DNS.Reverse(ip)
+]

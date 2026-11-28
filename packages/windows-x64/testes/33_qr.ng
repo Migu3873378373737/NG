@@ -1,0 +1,6 @@
+# Teste do modulo nativo @qr
+Importar @qr
+Print QR.Terminal("AstraBot NG - teste de QR Code", "M")
+Se QR.SalvarPNG("AstraBot NG - teste de QR Code", "qr_teste.png", 8) == true [
+    Print "PNG gravado em qr_teste.png"
+]

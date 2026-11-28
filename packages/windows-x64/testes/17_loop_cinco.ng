@@ -1,0 +1,6 @@
+# Loop com cinco numeros
+Valores = [10, 20, 30, 40, 50]
+
+Loop Valor in Valores [
+    Print Valor
+]

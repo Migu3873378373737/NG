@@ -1,0 +1,10 @@
+# Biblioteca Padrao: path
+Importar @path
+
+Função Juntar(p1, p2) [
+    Y = Path.Join(p1, p2)
+]
+
+Função Base(caminho) [
+    Y = Path.Basename(caminho)
+]

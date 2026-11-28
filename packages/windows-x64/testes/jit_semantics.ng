@@ -1,0 +1,31 @@
+# Teste do JIT nativo (Core 0b): hot paths/funções/loops
+X = 3 * 4 + 5
+Y2 = X - 1
+Print X
+Print Y2
+
+Funcao Dobro(n) [
+    Y = n * 2
+]
+
+Funcao Soma(a, b) [
+    Y = a + b
+]
+
+Print Dobro(21)
+Print Soma(3, 4)
+
+Total = 0
+Enquanto Total < 5 [
+    Total = Total + 1
+]
+Print Total
+
+S = 0
+Loop J in [1, 2, 3, 4] [
+    S = S + J
+]
+Print S
+
+If2 = 0
+Print "inicio"

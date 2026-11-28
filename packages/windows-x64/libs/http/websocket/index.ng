@@ -1,0 +1,10 @@
+# Modulo WebSocket Nativo NG
+Importar @websocket
+
+Função Servidor(porta) [
+    Y = WebSocket.Servidor(porta)
+]
+
+Função Conectar(url) [
+    Y = WebSocket.Conectar(url)
+]

@@ -1,0 +1,10 @@
+# Biblioteca Padrao: regex
+Importar @regex
+
+Função Testar(padrao, texto) [
+    Y = Regex.Test(padrao, texto)
+]
+
+Função Corresponder(padrao, texto) [
+    Y = Regex.Match(padrao, texto)
+]

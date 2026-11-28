@@ -1,0 +1,6 @@
+# Biblioteca Padrao: csv
+Importar @csv
+
+Função Parse(texto) [
+    Y = CSV.Parse(texto)
+]

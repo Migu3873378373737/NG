@@ -1,0 +1,14 @@
+# Modulo HTTPS Nativo NG
+Importar @https
+
+Função Servidor() [
+    Y = HTTP.Servidor()
+]
+
+Função Get(url) [
+    Y = HTTP.Get(url)
+]
+
+Função Post(url, corpo) [
+    Y = HTTP.Post(url, corpo)
+]

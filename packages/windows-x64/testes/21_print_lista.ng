@@ -1,0 +1,9 @@
+# Print inteligente de listas
+Nomes = ["Carlos", "Renato", "Ângela", "Maria"]
+Print Nomes
+
+Numeros = [1, 2, 3]
+Print Numeros
+
+Vazia = []
+Print Vazia

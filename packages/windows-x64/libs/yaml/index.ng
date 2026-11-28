@@ -1,0 +1,6 @@
+# Biblioteca Padrao: yaml
+Importar @yaml
+
+Função Parse(texto) [
+    Y = YAML.Parse(texto)
+]
